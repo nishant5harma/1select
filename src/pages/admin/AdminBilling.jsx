@@ -64,6 +64,7 @@ export default function AdminBilling() {
   const [rowSaving,    setRowSaving]    = useState(new Set())
   const [rowSaved,     setRowSaved]     = useState(new Set())
   const [rowError,     setRowError]     = useState({})
+  const [priceOverrideErrors, setPriceOverrideErrors] = useState({}) // fix: per-row Enterprise price validation
   const [invoiceStatus, setInvoiceStatus] = useState({})
   const [notesModal,   setNotesModal]   = useState(null)
   const [notesText,    setNotesText]    = useState('')
@@ -171,6 +172,13 @@ export default function AdminBilling() {
 
   // ── Client row editing ─────────────────────────────────────────
 
+  // fix: detect Enterprise plan — null price_monthly means price override is required
+  function isEnterprisePlan(planId) {
+    if (!planId) return false
+    const p = plans.find(pl => pl.id === planId)
+    return p?.name?.toLowerCase() === 'enterprise'
+  }
+
   function getRow(client) {
     return dirtyRows[client.id] ?? {
       plan_id:             client.plan_id             ?? null,
@@ -189,6 +197,10 @@ export default function AdminBilling() {
       }
       return { ...prev, [clientId]: { ...base, [field]: value } }
     })
+    // fix: clear price validation error when the user edits price or switches plan
+    if (field === 'price_override' || field === 'plan_id') {
+      setPriceOverrideErrors(prev => { const n = { ...prev }; delete n[clientId]; return n })
+    }
   }
 
   function isRowDirty(client) {
@@ -204,6 +216,14 @@ export default function AdminBilling() {
   async function saveRow(client) {
     const row = dirtyRows[client.id]
     if (!row) return
+    // fix: Enterprise plan requires a numeric price override — block save if missing
+    if (isEnterprisePlan(row.plan_id)) {
+      const val = String(row.price_override ?? '').trim()
+      if (!val || isNaN(Number(val)) || Number(val) <= 0) {
+        setPriceOverrideErrors(prev => ({ ...prev, [client.id]: 'Enterprise plan requires a custom price' }))
+        return
+      }
+    }
     setRowSaving(prev => new Set([...prev, client.id]))
     const payload = {
       plan_id:             row.plan_id    || null,
@@ -221,6 +241,7 @@ export default function AdminBilling() {
       ))
       setDirtyRows(prev => { const n = { ...prev }; delete n[client.id]; return n })
       setRowError(prev => { const n = { ...prev }; delete n[client.id]; return n })
+      setPriceOverrideErrors(prev => { const n = { ...prev }; delete n[client.id]; return n }) // fix: clear on success
       setRowSaved(prev => new Set([...prev, client.id]))
       setTimeout(() => setRowSaved(prev => { const n = new Set(prev); n.delete(client.id); return n }), 2000)
     }
@@ -348,7 +369,7 @@ export default function AdminBilling() {
                     <tr key={p.id} style={{ borderBottom: '1px solid var(--border2)' }}>
                       <td style={{ ...TD, fontWeight: 500 }}>{p.name}</td>
                       <td style={{ ...TD, fontFamily: 'var(--font-mono)', color: 'var(--accent)' }}>
-                        {p.price_monthly != null ? `₹${Number(p.price_monthly).toLocaleString()}` : '—'}
+                        {p.price_monthly != null ? `₹${Number(p.price_monthly).toLocaleString()}` : 'Custom'}{/* fix: show Custom for Enterprise instead of — */}
                       </td>
                       <td style={{ ...TD, color: 'var(--text-3)', maxWidth: 280 }}>{p.description ?? '—'}</td>
                       <td style={{ ...TD, fontFamily: 'var(--font-mono)', textAlign: 'center' }}>{count}</td>
@@ -432,36 +453,50 @@ export default function AdminBilling() {
 
                       {/* Price Override */}
                       <td style={TD}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                          <span style={{ color: 'var(--text-3)', fontSize: 12, flexShrink: 0 }}>₹</span>
-                          <input
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            placeholder={planPrice != null ? String(Number(planPrice).toLocaleString()) : '—'}
-                            value={row.price_override}
-                            onChange={e => setRowField(c.id, 'price_override', e.target.value)}
-                            style={{
-                              ...MI,
-                              width: 84,
-                              padding: '5px 8px',
-                              color: hasOverride ? 'var(--accent)' : 'var(--text)',
-                            }}
-                          />
-                          {hasOverride && (
-                            <span style={{
-                              fontSize: 9,
-                              padding: '2px 5px',
-                              background: 'rgba(184,146,74,0.12)',
-                              color: 'var(--accent)',
-                              borderRadius: 'var(--r)',
-                              fontFamily: 'var(--font-mono)',
-                              letterSpacing: '0.04em',
-                              whiteSpace: 'nowrap',
-                              flexShrink: 0,
-                            }}>custom</span>
-                          )}
-                        </div>
+                        {(() => {
+                          const isEnterprise = isEnterprisePlan(row.plan_id) // fix: drive required state from plan type
+                          const priceErr = priceOverrideErrors[c.id]
+                          return (
+                            <div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                <span style={{ color: 'var(--text-3)', fontSize: 12, flexShrink: 0 }}>₹</span>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  placeholder={isEnterprise ? 'Required for Enterprise' : planPrice != null ? String(Number(planPrice).toLocaleString()) : '—'} // fix: required placeholder for Enterprise
+                                  value={row.price_override}
+                                  onChange={e => setRowField(c.id, 'price_override', e.target.value)}
+                                  style={{
+                                    ...MI,
+                                    width: isEnterprise ? 160 : 84,
+                                    padding: '5px 8px',
+                                    color: hasOverride ? 'var(--accent)' : 'var(--text)',
+                                    borderColor: isEnterprise ? 'var(--accent)' : priceErr ? 'var(--red)' : undefined, // fix: accent border when Enterprise
+                                  }}
+                                />
+                                {hasOverride && (
+                                  <span style={{
+                                    fontSize: 9,
+                                    padding: '2px 5px',
+                                    background: 'rgba(184,146,74,0.12)',
+                                    color: 'var(--accent)',
+                                    borderRadius: 'var(--r)',
+                                    fontFamily: 'var(--font-mono)',
+                                    letterSpacing: '0.04em',
+                                    whiteSpace: 'nowrap',
+                                    flexShrink: 0,
+                                  }}>custom</span>
+                                )}
+                              </div>
+                              {priceErr && ( // fix: inline error below field for missing Enterprise price
+                                <div style={{ fontSize: 10, color: 'var(--red)', marginTop: 4, fontFamily: 'var(--font-mono)' }}>
+                                  {priceErr}
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })()}
                       </td>
 
                       {/* Status */}
