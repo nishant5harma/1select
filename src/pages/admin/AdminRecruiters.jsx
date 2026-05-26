@@ -32,6 +32,7 @@ export default function AdminRecruiters() {
   useEffect(() => { load() }, [])
 
   async function load() {
+    try { // fix: wrap in try/finally so setLoading(false) always fires on query error
     const [{ data: recs }, { data: cls }, { data: asgn }] = await Promise.all([
       supabase.from('profiles').select('*').eq('user_role', 'recruiter').order('created_at', { ascending: false }),
       supabase.from('profiles').select('id, company_name, full_name, email').eq('user_role', 'client').order('company_name'),
@@ -40,7 +41,9 @@ export default function AdminRecruiters() {
     setRecruiters(recs ?? [])
     setClients(cls ?? [])
     setAssignments(asgn ?? [])
-    setLoading(false)
+    } finally {
+      setLoading(false) // fix: always clear loading even when queries fail
+    }
   }
 
   function assignedClients(recruiterId) {
@@ -54,7 +57,8 @@ export default function AdminRecruiters() {
     if (!inv.invEmail.trim()) { setInvError('Email is required'); return }
     setInviting(true); setInvError('')
     try {
-      const { data: { session } } = await supabase.auth.getSession()
+      const { data: sessionData } = await supabase.auth.getSession() // fix: guard against null session destructure
+      const session = sessionData?.session
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/invite-user`, {
         method: 'POST',
         headers: {

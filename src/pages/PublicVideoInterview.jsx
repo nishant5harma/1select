@@ -85,9 +85,10 @@ export default function PublicVideoInterview() {
   }
 
   async function handleSave(update) {
-    await supabase.functions.invoke('save-interview-recording', {
+    const { error } = await supabase.functions.invoke('save-interview-recording', {
       body: { token, table: data.table, ...update },
     })
+    if (error) throw new Error(error.message ?? 'Failed to save recording') // fix: propagate save errors so VideoInterview can surface them
   }
 
   function handleComplete() {

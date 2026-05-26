@@ -102,40 +102,43 @@ export default function AdminJobs() {
   }
 
   async function load() {
-    let q = supabase
-      .from('jobs')
-      .select('*, profiles(company_name, email)')
-      .order('created_at', { ascending: false })
-    if (clientId) q = q.eq('recruiter_id', clientId)
+    try { // fix: wrap in try/finally so setLoading(false) always fires even on query error
+      let q = supabase
+        .from('jobs')
+        .select('*, profiles(company_name, email)')
+        .order('created_at', { ascending: false })
+      if (clientId) q = q.eq('recruiter_id', clientId)
 
-    const { data: jobData } = await q
-    const ids = (jobData ?? []).map(j => j.id)
+      const { data: jobData } = await q
+      const ids = (jobData ?? []).map(j => j.id)
 
-    let candData = []
-    if (ids.length) {
-      const { data } = await supabase
-        .from('candidates')
-        .select('job_id, match_pass, match_score, scores')
-        .in('job_id', ids)
-      candData = data ?? []
+      let candData = []
+      if (ids.length) {
+        const { data } = await supabase
+          .from('candidates')
+          .select('job_id, match_pass, match_score, scores')
+          .in('job_id', ids)
+        candData = data ?? []
+      }
+
+      const cm = {}
+      candData.forEach(c => {
+        if (!cm[c.job_id]) cm[c.job_id] = []
+        cm[c.job_id].push(c)
+      })
+
+      let failSet = new Set()
+      if (ids.length) {
+        const { data: failures } = await supabase.from('webhook_failures').select('job_id').in('job_id', ids).eq('resolved', false)
+        ;(failures ?? []).forEach(f => failSet.add(f.job_id))
+      }
+
+      setJobs(jobData ?? [])
+      setCandMap(cm)
+      setWebhookFails(failSet)
+    } finally {
+      setLoading(false) // fix: always clear loading even when queries fail
     }
-
-    const cm = {}
-    candData.forEach(c => {
-      if (!cm[c.job_id]) cm[c.job_id] = []
-      cm[c.job_id].push(c)
-    })
-
-    let failSet = new Set()
-    if (ids.length) {
-      const { data: failures } = await supabase.from('webhook_failures').select('job_id').in('job_id', ids).eq('resolved', false)
-      ;(failures ?? []).forEach(f => failSet.add(f.job_id))
-    }
-
-    setJobs(jobData ?? [])
-    setCandMap(cm)
-    setWebhookFails(failSet)
-    setLoading(false)
   }
 
   async function toggleStatus(job) {

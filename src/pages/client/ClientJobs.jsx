@@ -369,9 +369,12 @@ export default function ClientJobs() {
   useEffect(() => { if (user) load() }, [user])
 
   async function load() {
+    try { // fix: wrap in try/finally so setLoading(false) always fires on query error
     const { data } = await supabase.from('jobs').select('*, candidates(count)').eq('recruiter_id', effectiveClientId).order('created_at', { ascending: false })
     setJobs(data ?? [])
-    setLoading(false)
+    } finally {
+      setLoading(false) // fix: always clear loading even when queries fail
+    }
   }
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))

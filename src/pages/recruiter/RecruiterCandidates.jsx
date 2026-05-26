@@ -645,17 +645,18 @@ export default function RecruiterCandidates() {
   }, [sourcingJob])
 
   async function load() {
+    try { // fix: wrap in try/finally so setLoading(false) always fires on query error
     const { data: rcData } = await supabase
       .from('recruiter_clients')
       .select('client_id')
       .eq('recruiter_id', user.id)
     const clientIds = (rcData ?? []).map(r => r.client_id)
-    if (!clientIds.length) { setLoading(false); return }
+    if (!clientIds.length) { return }
 
     const { data: jobData } = await supabase.from('jobs').select('id, title, description, required_skills').in('recruiter_id', clientIds)
     const ids = (jobData ?? []).map(j => j.id)
     setJobs(jobData ?? [])
-    if (!ids.length) { setLoading(false); return }
+    if (!ids.length) { return }
 
     const [{ data: cData }, { data: mData }] = await Promise.all([
       supabase.from('candidates').select('*').in('job_id', ids).order('match_score', { ascending: false, nullsFirst: false }).limit(1000),
@@ -663,7 +664,9 @@ export default function RecruiterCandidates() {
     ])
     setCandidates(cData ?? [])
     setPoolCandidates((mData ?? []).map(mapMatchToCandidate))
-    setLoading(false)
+    } finally {
+      setLoading(false) // fix: always clear loading even when queries fail
+    }
   }
 
   function stopPoll() {
@@ -737,7 +740,8 @@ export default function RecruiterCandidates() {
     try { sessionStorage.setItem('sourcing_pending', JSON.stringify({ jobId: job.id, startedAt })) } catch {}
     // Fire the edge function with keepalive:true so the request completes even if
     // the user switches tabs or navigates away before it finishes.
-    const { data: { session } } = await supabase.auth.getSession()
+    const { data: sessionData } = await supabase.auth.getSession() // fix: guard against null session destructure
+    const session = sessionData?.session
     fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/source-linkedin-candidates`, {
       method:    'POST',
       keepalive: true,

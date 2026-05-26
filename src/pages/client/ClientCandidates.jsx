@@ -422,12 +422,13 @@ export default function ClientCandidates() {
   }, [location.search])
 
   async function load() {
+    try { // fix: wrap in try/finally so setLoading(false) always fires on query error
     const { data: jobData } = await supabase.from('jobs').select('id, title').eq('recruiter_id', effectiveClientId)
     const ids = (jobData ?? []).map(j => j.id)
     jobIdsRef.current = ids
     setJobs(jobData ?? [])
     subscribeToJobs(ids)
-    if (!ids.length) { setLoading(false); return }
+    if (!ids.length) { return }
 
     const { data: cData } = await supabase
       .from('candidates')
@@ -437,7 +438,9 @@ export default function ClientCandidates() {
       .order('match_score', { ascending: false, nullsFirst: false })
 
     setCandidates(cData ?? [])
-    setLoading(false)
+    } finally {
+      setLoading(false) // fix: always clear loading even when queries fail
+    }
   }
 
   async function dismissCandidate(id) {

@@ -36,6 +36,7 @@ export default function RecruiterDashboard() {
   }, [user, profileLoading])
 
   async function load() {
+    try { // fix: wrap in try/finally so setLoading(false) always fires on query error
     // Load clients assigned to this recruiter
     const { data: rcData } = await supabase
       .from('recruiter_clients')
@@ -48,7 +49,6 @@ export default function RecruiterDashboard() {
     if (!clientIds.length) {
       setClients([])
       setStats({ clients: 0, jobs: 0, candidates: 0, interviewed: 0 })
-      setLoading(false)
       return
     }
 
@@ -92,7 +92,9 @@ export default function RecruiterDashboard() {
       candidates: totalCandidates,
       interviewed,
     })
-    setLoading(false)
+    } finally {
+      setLoading(false) // fix: always clear loading even when queries fail
+    }
   }
 
   async function handlePasswordChange(e) {

@@ -12,6 +12,7 @@ export default function RecruiterClients() {
   useEffect(() => { if (user) load() }, [user])
 
   async function load() {
+    try { // fix: wrap in try/finally so setLoading(false) always fires on query error
     // Load assigned clients with their profile data
     const { data: rcData } = await supabase
       .from('recruiter_clients')
@@ -23,7 +24,6 @@ export default function RecruiterClients() {
 
     if (!clientIds.length) {
       setClients([])
-      setLoading(false)
       return
     }
 
@@ -46,7 +46,9 @@ export default function RecruiterClients() {
     })
 
     setClients(enriched)
-    setLoading(false)
+    } finally {
+      setLoading(false) // fix: always clear loading even when queries fail
+    }
   }
 
   if (loading) return <div className="page"><span className="spinner" /></div>

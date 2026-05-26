@@ -50,6 +50,7 @@ export default function CandidateDashboard() {
   useEffect(() => { if (user) load() }, [user])
 
   async function load() {
+    try { // fix: wrap in try/finally so setLoading(false) always fires on query error
     const { data: pool } = await supabase
       .from('talent_pool')
       .select('*')
@@ -67,7 +68,9 @@ export default function CandidateDashboard() {
 
     setMatches(matchRes.data ?? [])
     setApplications(appRes.data ?? [])
-    setLoading(false)
+    } finally {
+      setLoading(false) // fix: always clear loading even when queries fail
+    }
   }
 
   if (loading) return <div className="page" style={{ display: 'flex', alignItems: 'center', gap: 10 }}><span className="spinner" /> Loading…</div>

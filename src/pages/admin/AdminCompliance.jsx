@@ -40,12 +40,15 @@ export default function AdminCompliance() {
   useEffect(() => { loadJobs() }, [])
 
   async function loadJobs() {
+    try { // fix: wrap in try/finally so setLoading(false) always fires on query error
     const { data } = await supabase
       .from('jobs')
       .select('id, title, created_at, compliance_signed, profiles(company_name)')
       .order('created_at', { ascending: false })
     setJobs(data ?? [])
-    setLoading(false)
+    } finally {
+      setLoading(false) // fix: always clear loading even when queries fail
+    }
   }
 
   async function selectJob(id) {

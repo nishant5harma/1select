@@ -57,6 +57,7 @@ export default function AdminBoard() {
   async function load() {
     setLoading(true)
     setLoadError('')
+    try { // fix: wrap in try/finally so setLoading(false) always fires on query error
     const [
       { data: cands, error: candsErr },
       { data: clientData },
@@ -69,11 +70,13 @@ export default function AdminBoard() {
       supabase.from('profiles').select('id, company_name, full_name').eq('user_role', 'client'),
       supabase.from('jobs').select('id, title, recruiter_id').eq('status', 'active'),
     ])
-    if (candsErr) { setLoadError(candsErr.message); setLoading(false); return }
+    if (candsErr) { setLoadError(candsErr.message); return }
     setAllCandidates((cands ?? []).map(c => ({ ...c, _stage: deriveStage(c) })))
     setClients(clientData ?? [])
     setJobs(jobData ?? [])
-    setLoading(false)
+    } finally {
+      setLoading(false) // fix: always clear loading even when queries fail
+    }
   }
 
   async function moveCard(candidateId, newStage) {

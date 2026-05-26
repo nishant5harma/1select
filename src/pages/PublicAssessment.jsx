@@ -60,6 +60,7 @@ export default function PublicAssessment() {
       setError('Submission failed — please try again.')
       return
     }
+    setSubmitting(false) // fix: reset submitting state on success path so button re-enables
     setDone(true)
   }
 

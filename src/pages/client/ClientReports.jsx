@@ -136,10 +136,11 @@ export default function ClientReports() {
   useEffect(() => { if (user) load() }, [user])
 
   async function load() {
+    try { // fix: wrap in try/finally so setLoading(false) always fires on query error
     const { data: jobData } = await supabase.from('jobs').select('id, title, status').eq('recruiter_id', effectiveClientId).order('created_at', { ascending: false })
     const ids = (jobData ?? []).map(j => j.id)
     setJobs(jobData ?? [])
-    if (!ids.length) { setLoading(false); return }
+    if (!ids.length) { return }
 
     const [{ data: interviewed }, { data: awaiting }] = await Promise.all([
       supabase.from('candidates').select('*').in('job_id', ids).not('scores', 'is', null).order('match_score', { ascending: false }),
@@ -147,7 +148,9 @@ export default function ClientReports() {
     ])
     setCandidates(interviewed ?? [])
     setPending(awaiting ?? [])
-    setLoading(false)
+    } finally {
+      setLoading(false) // fix: always clear loading even when queries fail
+    }
   }
 
   const filtered  = selectedJobId === 'all' ? candidates : candidates.filter(c => c.job_id === selectedJobId)

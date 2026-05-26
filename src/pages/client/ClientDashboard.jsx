@@ -24,6 +24,7 @@ export default function ClientDashboard() {
 
   useEffect(() => {
     if (!user || profileLoading) return
+    if (!effectiveClientId) return // fix: wait until effectiveClientId is resolved for stakeholders
     if (initRef.current) return
     initRef.current = true
 
@@ -47,49 +48,50 @@ export default function ClientDashboard() {
     } else {
       load()
     }
-  }, [user, profileLoading])
+  }, [user, profileLoading, effectiveClientId]) // fix: include effectiveClientId so stakeholders load correctly
 
   async function load() {
-    const { data: jobs } = await supabase
-      .from('jobs')
-      .select('id, title, status, created_at')
-      .eq('recruiter_id', effectiveClientId)
-      .order('created_at', { ascending: false })
+    try { // fix: wrap in try/finally so setLoading(false) always fires on query error
+      const { data: jobs } = await supabase
+        .from('jobs')
+        .select('id, title, status, created_at')
+        .eq('recruiter_id', effectiveClientId)
+        .order('created_at', { ascending: false })
 
-    const jobIds = (jobs ?? []).map(j => j.id)
-    setRecentJobs((jobs ?? []).slice(0, 4))
+      const jobIds = (jobs ?? []).map(j => j.id)
+      setRecentJobs((jobs ?? []).slice(0, 4))
 
-    if (!jobIds.length) {
-      setLoading(false)
-      return
+      if (!jobIds.length) {
+        return
+      }
+
+      const { data: allCandidates } = await supabase
+        .from('candidates')
+        .select('id, full_name, candidate_role, match_score, match_pass, scores, created_at, job_id')
+        .in('job_id', jobIds)
+        .not('match_pass', 'is', null)   // only show screened candidates to clients
+        .order('created_at', { ascending: false })
+
+      const all = allCandidates ?? []
+      setStats({
+        jobs:        jobs.length,
+        candidates:  all.length,
+        screened:    all.filter(c => c.match_score != null).length,
+        passed:      all.filter(c => c.match_pass === true).length,
+        interviewed: all.filter(c => c.scores != null).length,
+      })
+      setRecentCandidates(all.slice(0, 6))
+
+      const { data: activity } = await supabase
+        .from('audit_log')
+        .select('id, action, entity_type, metadata, created_at')
+        .in('job_id', jobIds)
+        .order('created_at', { ascending: false })
+        .limit(10)
+      setRecentActivity(activity ?? [])
+    } finally {
+      setLoading(false) // fix: always clear loading even when queries fail
     }
-
-    const { data: allCandidates } = await supabase
-      .from('candidates')
-      .select('id, full_name, candidate_role, match_score, match_pass, scores, created_at, job_id')
-      .in('job_id', jobIds)
-      .not('match_pass', 'is', null)   // only show screened candidates to clients
-      .order('created_at', { ascending: false })
-
-    const all = allCandidates ?? []
-    setStats({
-      jobs:        jobs.length,
-      candidates:  all.length,
-      screened:    all.filter(c => c.match_score != null).length,
-      passed:      all.filter(c => c.match_pass === true).length,
-      interviewed: all.filter(c => c.scores != null).length,
-    })
-    setRecentCandidates(all.slice(0, 6))
-
-    const { data: activity } = await supabase
-      .from('audit_log')
-      .select('id, action, entity_type, metadata, created_at')
-      .in('job_id', jobIds)
-      .order('created_at', { ascending: false })
-      .limit(10)
-    setRecentActivity(activity ?? [])
-
-    setLoading(false)
   }
 
   async function handlePasswordChange(e) {

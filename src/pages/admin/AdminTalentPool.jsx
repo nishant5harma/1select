@@ -75,17 +75,20 @@ export default function AdminTalentPool() {
 
   async function load(p = 0) {
     setLoading(true)
-    const from = p * PAGE_SIZE
-    const to   = from + PAGE_SIZE - 1
-    const [{ data: pool, count }, { data: jobList }] = await Promise.all([
-      supabase.from('talent_pool').select('*', { count: 'exact' }).order('created_at', { ascending: false }).range(from, to),
-      supabase.from('jobs').select('id, title, profiles(company_name)').eq('status', 'active').order('created_at', { ascending: false }).limit(500),
-    ])
-    setCandidates(pool ?? [])
-    setTotal(count ?? 0)
-    setPage(p)
-    setJobs(jobList ?? [])
-    setLoading(false)
+    try { // fix: wrap in try/finally so setLoading(false) always fires on query error
+      const from = p * PAGE_SIZE
+      const to   = from + PAGE_SIZE - 1
+      const [{ data: pool, count }, { data: jobList }] = await Promise.all([
+        supabase.from('talent_pool').select('*', { count: 'exact' }).order('created_at', { ascending: false }).range(from, to),
+        supabase.from('jobs').select('id, title, profiles(company_name)').eq('status', 'active').order('created_at', { ascending: false }).limit(500),
+      ])
+      setCandidates(pool ?? [])
+      setTotal(count ?? 0)
+      setPage(p)
+      setJobs(jobList ?? [])
+    } finally {
+      setLoading(false) // fix: always clear loading even when Promise.all fails
+    }
   }
 
   const addLog = (msg, type = '') => setLog(p => [...p, { id: Date.now() + Math.random(), msg, type }])

@@ -72,6 +72,7 @@ export default function RecruiterJobs() {
     const effectiveIds = ids ?? clientIds
     if (!effectiveIds?.length) { setLoading(false); return }
 
+    try { // fix: wrap in try/finally so setLoading(false) always fires on query error
     const { data: jobData } = await supabase
       .from('jobs')
       .select('*, profiles(company_name, email)')
@@ -103,7 +104,9 @@ export default function RecruiterJobs() {
     setJobs(jobData ?? [])
     setCandMap(cm)
     setWebhookFails(failSet)
-    setLoading(false)
+    } finally {
+      setLoading(false) // fix: always clear loading even when queries fail
+    }
   }
 
   const setF = (k, v) => setForm(f => ({ ...f, [k]: v }))

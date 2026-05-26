@@ -16,21 +16,24 @@ export default function AdminLinkedInPool({ allowedClientIds } = {}) {
 
   async function load() {
     setLoading(true)
-    let jobQ = supabase.from('jobs').select('id, title, profiles(company_name)').eq('status', 'active').order('created_at', { ascending: false })
-    if (allowedClientIds?.length) jobQ = jobQ.in('recruiter_id', allowedClientIds)
+    try { // fix: wrap in try/finally so setLoading(false) always fires on query error
+      let jobQ = supabase.from('jobs').select('id, title, profiles(company_name)').eq('status', 'active').order('created_at', { ascending: false })
+      if (allowedClientIds?.length) jobQ = jobQ.in('recruiter_id', allowedClientIds)
 
-    const [{ data: cands }, { data: jobList }] = await Promise.all([
-      supabase
-        .from('candidates')
-        .select('*')
-        .eq('source', 'linkedin')
-        .is('job_id', null)
-        .order('created_at', { ascending: false }),
-      jobQ,
-    ])
-    setCandidates(cands ?? [])
-    setJobs(jobList ?? [])
-    setLoading(false)
+      const [{ data: cands }, { data: jobList }] = await Promise.all([
+        supabase
+          .from('candidates')
+          .select('*')
+          .eq('source', 'linkedin')
+          .is('job_id', null)
+          .order('created_at', { ascending: false }),
+        jobQ,
+      ])
+      setCandidates(cands ?? [])
+      setJobs(jobList ?? [])
+    } finally {
+      setLoading(false) // fix: always clear loading even when Promise.all fails
+    }
   }
 
   async function addToJob(candidate) {

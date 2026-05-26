@@ -74,39 +74,42 @@ export default function AdminBilling() {
   async function loadAll() {
     setLoading(true)
     setPlansLoading(true)
-    const ms = monthStart()
-    const [
-      { data: plansData },
-      { data: clientData },
-      { data: jobData },
-      { data: candData },
-    ] = await Promise.all([
-      supabase.from('plans').select('*').order('price_monthly', { ascending: true, nullsFirst: true }),
-      supabase.from('profiles').select('*, plans(*)').eq('user_role', 'client').order('company_name'),
-      supabase.from('jobs').select('id, recruiter_id, created_at').limit(2000),
-      supabase.from('candidates').select('job_id, created_at, scores').limit(2000),
-    ])
+    try { // fix: wrap in try/finally so loading flags always clear even on query error
+      const ms = monthStart()
+      const [
+        { data: plansData },
+        { data: clientData },
+        { data: jobData },
+        { data: candData },
+      ] = await Promise.all([
+        supabase.from('plans').select('*').order('price_monthly', { ascending: true, nullsFirst: true }),
+        supabase.from('profiles').select('*, plans(*)').eq('user_role', 'client').order('company_name'),
+        supabase.from('jobs').select('id, recruiter_id, created_at'), // fix: removed .limit(2000) — count all jobs for accurate billing
+        supabase.from('candidates').select('job_id, created_at, scores'), // fix: removed .limit(2000) — count all candidates
+      ])
 
-    const allClients = clientData ?? []
-    const allJobs    = jobData   ?? []
-    const allCands   = candData  ?? []
+      const allClients = clientData ?? []
+      const allJobs    = jobData   ?? []
+      const allCands   = candData  ?? []
 
-    const usageMap = {}
-    for (const c of allClients) {
-      const clientJobs   = allJobs.filter(j => j.recruiter_id === c.id)
-      const clientJobIds = clientJobs.map(j => j.id)
-      const rolesThisMonth  = clientJobs.filter(j => j.created_at >= ms).length
-      const cands           = allCands.filter(x => clientJobIds.includes(x.job_id))
-      const candsThisMonth  = cands.filter(x => x.created_at >= ms).length
-      const interviews      = cands.filter(x => x.scores?.overallScore != null && x.created_at >= ms).length
-      usageMap[c.id] = { roles: rolesThisMonth, candidates: candsThisMonth, interviews }
+      const usageMap = {}
+      for (const c of allClients) {
+        const clientJobs   = allJobs.filter(j => j.recruiter_id === c.id)
+        const clientJobIds = clientJobs.map(j => j.id)
+        const rolesThisMonth  = clientJobs.filter(j => j.created_at >= ms).length
+        const cands           = allCands.filter(x => clientJobIds.includes(x.job_id))
+        const candsThisMonth  = cands.filter(x => x.created_at >= ms).length
+        const interviews      = cands.filter(x => x.scores?.overallScore != null && x.created_at >= ms).length
+        usageMap[c.id] = { roles: rolesThisMonth, candidates: candsThisMonth, interviews }
+      }
+
+      setPlans(plansData ?? [])
+      setClients(allClients)
+      setUsage(usageMap)
+    } finally {
+      setLoading(false) // fix: always clear loading flags even when Promise.all fails
+      setPlansLoading(false)
     }
-
-    setPlans(plansData ?? [])
-    setClients(allClients)
-    setUsage(usageMap)
-    setLoading(false)
-    setPlansLoading(false)
   }
 
   // ── Plans CRUD ─────────────────────────────────────────────────

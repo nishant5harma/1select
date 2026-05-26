@@ -37,6 +37,7 @@ export default function CandidateMatches() {
   useEffect(() => { if (user) load() }, [user])
 
   async function load() {
+    try { // fix: wrap in try/finally so setLoading(false) always fires on query error
     const { data: pool } = await supabase
       .from('talent_pool')
       .select('id')
@@ -51,8 +52,9 @@ export default function CandidateMatches() {
         .order('match_score', { ascending: false })
       setMatches(matchData ?? [])
     }
-
-    setLoading(false)
+    } finally {
+      setLoading(false) // fix: always clear loading even when queries fail
+    }
   }
 
   const FILTERS = [

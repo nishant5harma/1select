@@ -426,7 +426,8 @@ Return the subject line first starting with "SUBJECT: ", then a blank line, then
     logAudit(supabase, { actorId: user?.id, actorRole: profile?.user_role ?? 'recruiter', action: `decision_${decision}`, entityType: 'candidate', entityId: candidate.id, jobId: activeJob?.id, metadata: { candidate_name: candidate.full_name, decision, notes } })
     await refreshCandidates()
 
-    const { data: { session } } = await supabase.auth.getSession()
+    const { data: sessionData } = await supabase.auth.getSession() // fix: guard against null session destructure
+    const session = sessionData?.session
     const authHeader = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` }
 
     if (decision === 'hired') {

@@ -28,31 +28,34 @@ export default function AdminSettings() {
 
   async function loadIntegrationSettings() {
     setSourcingLogLoading(true)
-    const ms = (() => { const d = new Date(); d.setDate(1); d.setHours(0,0,0,0); return d.toISOString() })()
-    const [
-      { data: settings },
-      { count: totalSourced },
-      { count: inPipeline },
-      { count: talentPool },
-      { count: runsThisMonth },
-      { data: logRows },
-    ] = await Promise.all([
-      supabase.from('platform_settings').select('key, value').in('key', ['linkedin_sourcing_enabled', 'linkedin_max_profiles']),
-      supabase.from('candidates').select('*', { count: 'exact', head: true }).eq('source', 'linkedin'),
-      supabase.from('candidates').select('*', { count: 'exact', head: true }).eq('source', 'linkedin').not('job_id', 'is', null),
-      supabase.from('candidates').select('*', { count: 'exact', head: true }).eq('source', 'linkedin').is('job_id', null),
-      supabase.from('linkedin_sourcing_log').select('*', { count: 'exact', head: true }).gte('triggered_at', ms),
-      supabase.from('linkedin_sourcing_log').select('*, jobs(title)').order('triggered_at', { ascending: false }).limit(50),
-    ])
-    if (settings) {
-      const enabled = settings.find(s => s.key === 'linkedin_sourcing_enabled')
-      const max     = settings.find(s => s.key === 'linkedin_max_profiles')
-      if (enabled) setLinkedinEnabled(enabled.value === 'true')
-      if (max)     setLinkedinMaxProfiles(Number(max.value) || 20)
+    try { // fix: wrap in try/finally so setSourcingLogLoading(false) always fires on query error
+      const ms = (() => { const d = new Date(); d.setDate(1); d.setHours(0,0,0,0); return d.toISOString() })()
+      const [
+        { data: settings },
+        { count: totalSourced },
+        { count: inPipeline },
+        { count: talentPool },
+        { count: runsThisMonth },
+        { data: logRows },
+      ] = await Promise.all([
+        supabase.from('platform_settings').select('key, value').in('key', ['linkedin_sourcing_enabled', 'linkedin_max_profiles']),
+        supabase.from('candidates').select('*', { count: 'exact', head: true }).eq('source', 'linkedin'),
+        supabase.from('candidates').select('*', { count: 'exact', head: true }).eq('source', 'linkedin').not('job_id', 'is', null),
+        supabase.from('candidates').select('*', { count: 'exact', head: true }).eq('source', 'linkedin').is('job_id', null),
+        supabase.from('linkedin_sourcing_log').select('*', { count: 'exact', head: true }).gte('triggered_at', ms),
+        supabase.from('linkedin_sourcing_log').select('*, jobs(title)').order('triggered_at', { ascending: false }).limit(50),
+      ])
+      if (settings) {
+        const enabled = settings.find(s => s.key === 'linkedin_sourcing_enabled')
+        const max     = settings.find(s => s.key === 'linkedin_max_profiles')
+        if (enabled) setLinkedinEnabled(enabled.value === 'true')
+        if (max)     setLinkedinMaxProfiles(Number(max.value) || 20)
+      }
+      setSourcingStats({ total: totalSourced ?? 0, inPipeline: inPipeline ?? 0, talentPool: talentPool ?? 0, runsThisMonth: runsThisMonth ?? 0 })
+      setSourcingLog(logRows ?? [])
+    } finally {
+      setSourcingLogLoading(false) // fix: always clear loading even when Promise.all fails
     }
-    setSourcingStats({ total: totalSourced ?? 0, inPipeline: inPipeline ?? 0, talentPool: talentPool ?? 0, runsThisMonth: runsThisMonth ?? 0 })
-    setSourcingLog(logRows ?? [])
-    setSourcingLogLoading(false)
   }
 
   async function saveIntegrationSettings() {

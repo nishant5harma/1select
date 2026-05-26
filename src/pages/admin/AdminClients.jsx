@@ -75,6 +75,7 @@ export default function AdminClients() {
   useEffect(() => { setPage(1) }, [search, statusFilter, sortBy])
 
   async function load() {
+    try { // fix: wrap in try/finally so setLoading(false) always fires even on query error
     const [
       { data: profileData },
       { data: jobData },
@@ -111,7 +112,9 @@ export default function AdminClients() {
     setAllRecruiters(recData ?? [])
     setRcMap(rm)
     setPlans(planData ?? [])
-    setLoading(false)
+    } finally {
+      setLoading(false) // fix: always clear loading even when Promise.all fails
+    }
   }
 
   // ── Per-client helpers ────────────────────────────────────────────────────────

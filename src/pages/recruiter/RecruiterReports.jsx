@@ -156,17 +156,18 @@ export default function RecruiterReports() {
 
   async function load() {
     setLoading(true)
+    try { // fix: wrap in try/finally so setLoading(false) always fires on query error
     const { data: rcData } = await supabase
       .from('recruiter_clients')
       .select('client_id')
       .eq('recruiter_id', user.id)
     const clientIds = (rcData ?? []).map(r => r.client_id)
-    if (!clientIds.length) { setLoading(false); return }
+    if (!clientIds.length) { return }
 
     const { data: jobData } = await supabase.from('jobs').select('id, title, status').in('recruiter_id', clientIds).order('created_at', { ascending: false })
     const ids = (jobData ?? []).map(j => j.id)
     setJobs(jobData ?? [])
-    if (!ids.length) { setLoading(false); return }
+    if (!ids.length) { return }
 
     const [
       { data: interviewed },
@@ -188,7 +189,9 @@ export default function RecruiterReports() {
 
     setCandidates([...(interviewed ?? []), ...flatMatch(matchInterviewed)])
     setPending([...(awaiting ?? []), ...flatMatch(matchAwaiting)])
-    setLoading(false)
+    } finally {
+      setLoading(false) // fix: always clear loading even when queries fail
+    }
   }
 
   const filtered  = selectedJobId === 'all' ? candidates : candidates.filter(c => c.job_id === selectedJobId)
