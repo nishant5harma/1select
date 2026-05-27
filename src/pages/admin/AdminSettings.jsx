@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../../lib/AuthContext'
 import { supabase } from '../../lib/supabase'
+import { useFormPersistence } from '../../hooks/useFormPersistence'
 import TwoFactorSection from '../../components/TwoFactorSection'
 import DemoLoader from '../../components/DemoLoader'
 
@@ -78,6 +79,67 @@ export default function AdminSettings() {
   const [planError,   setPlanError]   = useState('')
   const [deleteModal, setDeleteModal] = useState(null)
   const [deleting,    setDeleting]    = useState(false)
+
+  // ── Admin Users ───────────────────────────────────────────────────────────
+  const [admins,          setAdmins]          = useState([])
+  const [adminsLoading,   setAdminsLoading]   = useState(true)
+  const [showAdminInvite, setShowAdminInvite] = useState(false)
+  const { values: adminInv, updateField: updateAdminInv, clearForm: clearAdminInv } = useFormPersistence('admin_invite', { adminInvName: '', adminInvEmail: '' })
+  const [invitingAdmin,   setInvitingAdmin]   = useState(false)
+  const [adminInvError,   setAdminInvError]   = useState('')
+  const [adminInvResult,  setAdminInvResult]  = useState(null)
+
+  useEffect(() => { loadAdmins() }, [])
+
+  async function loadAdmins() {
+    setAdminsLoading(true)
+    try {
+      const { data } = await supabase.from('profiles').select('*').eq('user_role', 'admin').order('created_at', { ascending: false })
+      setAdmins(data ?? [])
+    } finally {
+      setAdminsLoading(false)
+    }
+  }
+
+  async function handleInviteAdmin() {
+    if (!adminInv.adminInvEmail.trim()) { setAdminInvError('Email is required'); return }
+    setInvitingAdmin(true); setAdminInvError('')
+    try {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const session = sessionData?.session
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/invite-user`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${session?.access_token ?? import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+        },
+        body: JSON.stringify({
+          email:        adminInv.adminInvEmail.trim().toLowerCase(),
+          contact_name: adminInv.adminInvName.trim() || adminInv.adminInvEmail.trim().toLowerCase(),
+          company_name: 'One Select',
+          role:         'admin',
+        }),
+      })
+      const result = await res.json()
+      if (!res.ok) throw new Error(result.error || result.message || 'Invite failed')
+      if (result.userId) {
+        await supabase.from('profiles').update({
+          user_role:   'admin',
+          full_name:   adminInv.adminInvName.trim() || adminInv.adminInvEmail.trim().toLowerCase(),
+          first_login: true,
+        }).eq('id', result.userId)
+      }
+      setAdminInvResult({ email: adminInv.adminInvEmail.trim().toLowerCase(), emailSent: result.emailSent })
+      clearAdminInv()
+      setShowAdminInvite(false)
+      await loadAdmins()
+    } catch (err) {
+      setAdminInvError(err.message)
+    } finally {
+      setInvitingAdmin(false)
+    }
+  }
 
   useEffect(() => { loadPlans() }, [])
 
@@ -196,6 +258,43 @@ export default function AdminSettings() {
             </div>
           </form>
         </div>
+      </div>
+
+      {/* Admin Users */}
+      <div className="section-card" style={{ marginBottom: 16 }}>
+        <div className="section-card-head">
+          <h3>Admin Users</h3>
+          <button className="btn btn-primary" style={{ fontSize: 11, padding: '5px 12px' }} onClick={() => { updateAdminInv('adminInvName', ''); updateAdminInv('adminInvEmail', ''); setAdminInvError(''); setShowAdminInvite(true) }}>
+            + Invite Admin
+          </button>
+        </div>
+        {adminsLoading ? (
+          <div style={{ padding: '24px', display: 'flex', justifyContent: 'center' }}><span className="spinner" /></div>
+        ) : admins.length === 0 ? (
+          <div className="empty-state">
+            <div style={{ fontSize: 28, marginBottom: 10, opacity: 0.3 }}>◉</div>
+            <div style={{ fontWeight: 400, color: 'var(--text-2)', marginBottom: 6 }}>No admins found</div>
+            <div style={{ fontSize: 12, color: 'var(--text-3)' }}>Invite another admin to share platform access.</div>
+          </div>
+        ) : (
+          <div>
+            {admins.map(a => (
+              <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 20px', borderBottom: '1px solid var(--border)' }}>
+                <div className="profile-avatar" style={{ width: 36, height: 36, fontSize: 15, borderRadius: 'var(--r)', flexShrink: 0 }}>
+                  {(a.full_name || a.email || '?')[0].toUpperCase()}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)' }}>
+                    {a.full_name || '—'}
+                    {a.id === user?.id && <span style={{ marginLeft: 8, fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--accent)', letterSpacing: '0.06em' }}>YOU</span>}
+                  </div>
+                  <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-3)', marginTop: 2 }}>{a.email}</div>
+                </div>
+                <span className="badge badge-blue" style={{ fontSize: 9 }}>Admin</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Plans */}
@@ -410,6 +509,63 @@ export default function AdminSettings() {
           </div>
         </div>
       </div>
+
+      {/* ── Invite Admin modal ── */}
+      {showAdminInvite && (
+        <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) setShowAdminInvite(false) }}>
+          <div className="modal">
+            <div className="modal-head">
+              <h3>Invite Admin</h3>
+              <button className="modal-close" onClick={() => setShowAdminInvite(false)}>×</button>
+            </div>
+            <div className="modal-body">
+              <div className="form-grid">
+                <div className="field span-2">
+                  <label>Full Name</label>
+                  <input type="text" placeholder="Jane Smith" value={adminInv.adminInvName} onChange={e => updateAdminInv('adminInvName', e.target.value)} autoFocus />
+                </div>
+                <div className="field span-2">
+                  <label>Email Address *</label>
+                  <input
+                    type="email" placeholder="jane@oneselectai.com"
+                    value={adminInv.adminInvEmail} onChange={e => updateAdminInv('adminInvEmail', e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleInviteAdmin() } }}
+                  />
+                </div>
+              </div>
+              {adminInvError && <div className="error-banner" style={{ marginTop: 14 }}>{adminInvError}</div>}
+              <div className="form-actions" style={{ marginTop: 20 }}>
+                <button className="btn btn-primary" disabled={invitingAdmin} onClick={handleInviteAdmin}>
+                  {invitingAdmin ? <><span className="spinner" style={{ width: 12, height: 12 }} /> Sending…</> : 'Send Invitation'}
+                </button>
+                <button className="btn btn-secondary" onClick={() => setShowAdminInvite(false)}>Cancel</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Invite Admin result ── */}
+      {adminInvResult && (
+        <div className="modal-overlay">
+          <div className="modal" style={{ maxWidth: 480 }}>
+            <div className="modal-head">
+              <h3 style={{ color: 'var(--green)' }}>Admin Invited!</h3>
+            </div>
+            <div className="modal-body">
+              <div style={{ padding: '10px 14px', marginBottom: 20, fontSize: 13, background: adminInvResult.emailSent ? 'var(--green-d)' : 'var(--amber-d)', borderLeft: `2px solid ${adminInvResult.emailSent ? 'var(--green)' : 'var(--amber)'}`, color: adminInvResult.emailSent ? 'var(--green)' : 'var(--amber)' }}>
+                {adminInvResult.emailSent ? `✓ Welcome email sent to ${adminInvResult.email}` : '⚠ Email failed — share login link manually'}
+              </div>
+              <p style={{ fontSize: 13, color: 'var(--text-2)', lineHeight: 1.6 }}>
+                They will receive a one-time login link. Once signed in, they will have full admin access to the platform.
+              </p>
+              <div className="form-actions" style={{ marginTop: 20 }}>
+                <button className="btn btn-primary" onClick={() => setAdminInvResult(null)}>Done</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Plan modal (new / edit) ── */}
       {planModal && (
