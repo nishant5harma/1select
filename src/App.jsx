@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { AuthProvider, useAuth } from './lib/AuthContext'
 import ErrorBoundary from './components/ErrorBoundary'
 import CookieBanner from './components/CookieBanner'
@@ -82,8 +82,12 @@ function ProtectedRoute({ children, role }) {
 
 function RootRedirect() {
   const { user, profile, profileLoading, loading } = useAuth()
+  const location = useLocation()
   if (loading || profileLoading) return <Loader />
-  if (!user) return <Navigate to="/login" replace />
+  if (!user) {
+    // fix: preserve ?code= so Supabase PKCE reset links that land on / still reach Login with the code intact
+    return <Navigate to={`/login${location.search}`} replace />
+  }
   return <Navigate to={roleHome(profile?.user_role)} replace />
 }
 
@@ -106,6 +110,9 @@ export default function App() {
           <Route path="/jobs" element={<PublicJobs />} />
           <Route path="/candidate/login"    element={<CandidateLogin />} />
           <Route path="/candidate/register" element={<CandidateRegister />} />
+          {/* fix: Supabase may redirect password-reset/magic-link codes to these paths depending on dashboard config */}
+          <Route path="/auth/callback" element={<RootRedirect />} />
+          <Route path="/auth/confirm"  element={<RootRedirect />} />
           <Route path="/" element={<RootRedirect />} />
 
           <Route path="/admin" element={<ProtectedRoute role="admin"><ErrorBoundary><AdminLayout /></ErrorBoundary></ProtectedRoute>}>
