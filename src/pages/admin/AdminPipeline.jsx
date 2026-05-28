@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../lib/AuthContext'
 import { usePersistentState } from '../../hooks/usePersistentState'
+import { useScheduling } from '../../hooks/useScheduling'
 
 import { callClaude, runAutomatedInterview, generateShortlistSummary, diagnosePipelineHealth } from '../../utils/api'
 import { subscribeRunner, runnerStart, runnerComplete, runnerPause, runnerResume, runnerStop, awaitResume, getRunnerState } from '../../utils/pipelineRunner'
@@ -103,6 +104,11 @@ export default function AdminPipeline({ allowedClientIds } = {}) {
 
   // Schedule modal — replaces simple liveInviteModal (Feature 4)
   const [scheduleModal, setScheduleModal] = useState(null)
+
+  // Cal.com self-scheduling
+  const { getSchedulingLink, loadBookingsForJob } = useScheduling()
+  const [calLinkModal, setCalLinkModal] = useState(null) // { candidate, email, link, sending, sent, error }
+  const [calBookings,  setCalBookings]  = useState({})   // candidateId → booking row
 
   // Final decision modal
   const [decisionModal, setDecisionModal] = useState(null)
@@ -226,6 +232,10 @@ export default function AdminPipeline({ allowedClientIds } = {}) {
       const map = {}
       ;(outData ?? []).forEach(r => { map[r.candidate_id] = r })
       setOutreachLog(map)
+
+      // Load Cal.com bookings for this job
+      const bookingMap = await loadBookingsForJob(id)
+      setCalBookings(bookingMap)
     } finally {
       setLoadingJob(false)
     }
@@ -359,6 +369,52 @@ Return the subject line first starting with "SUBJECT: ", then a blank line, then
       setAiInviteModal(m => ({ ...m, sending: false, sent: true }))
       addLog(`✉ AI interview invite sent to ${email.trim()}`, 'ok')
       logAudit(supabase, { actorId: user?.id, actorRole: profile?.user_role ?? 'recruiter', action: 'interview_invited', entityType: 'candidate', entityId: candidate.id, jobId: activeJob?.id, metadata: { candidate_name: candidate.full_name, email: email.trim(), job_title: activeJob?.title } })
+    }
+  }
+
+  // ── Cal.com self-scheduling invite ────────────────────────────────────────
+  async function sendCalInvite() {
+    const { candidate, email, link } = calLinkModal
+    if (!email.trim()) return
+    setCalLinkModal(m => ({ ...m, sending: true, error: null }))
+    try {
+      // Insert pending booking row
+      const col = candidate._fromPool ? 'job_match_id' : 'candidate_id'
+      const { error: insertErr } = await supabase.from('interview_bookings').insert({
+        [col]:        candidate.id,
+        job_id:       activeJob?.id ?? null,
+        recruiter_id: user?.id ?? null,
+        status:       'pending',
+      })
+      if (insertErr) throw new Error(insertErr.message)
+
+      // Send email with Cal.com scheduling link
+      const { data: sessionData } = await supabase.auth.getSession()
+      const session = sessionData?.session
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-cal-invite`, {
+        method: 'POST',
+        headers: {
+          'Content-Type':  'application/json',
+          'apikey':        import.meta.env.VITE_SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${session?.access_token ?? import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+        },
+        body: JSON.stringify({
+          email:            email.trim(),
+          name:             candidate.full_name,
+          job_title:        activeJob?.title ?? '',
+          company_name:     '',
+          scheduling_link:  link,
+        }),
+      })
+      const result = await res.json()
+      if (!res.ok) throw new Error(result.error || 'Failed to send invite')
+
+      setCalLinkModal(m => ({ ...m, sending: false, sent: true }))
+      addLog(`📅 Scheduling link sent to ${email.trim()}`, 'ok')
+      const newMap = await loadBookingsForJob(activeJob?.id)
+      setCalBookings(newMap)
+    } catch (err) {
+      setCalLinkModal(m => ({ ...m, sending: false, error: err.message }))
     }
   }
 
@@ -1593,23 +1649,61 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
           </div>
           <div className="candidate-list">
             {srch(liveInterviewCandidates).map(c => {
-              const liveStatus = c.live_interview_status ?? 'none'
-              const scheduled  = liveStatus === 'scheduled'
-              const completed  = liveStatus === 'completed'
+              const liveStatus  = c.live_interview_status ?? 'none'
+              const scheduled   = liveStatus === 'scheduled'
+              const completed   = liveStatus === 'completed'
+              const booking     = calBookings[c.id] ?? null
+              const calPending  = booking?.status === 'pending'
+              const calConfirmed = booking?.status === 'confirmed'
+              const calCancelled = booking?.status === 'cancelled' || booking?.status === 'rescheduled'
+
+              function openSchedule() {
+                const calLink = getSchedulingLink(profile, c, activeJob)
+                if (calLink) {
+                  setCalLinkModal({ candidate: c, email: c.email ?? '', link: calLink, sending: false, sent: false, error: null })
+                } else {
+                  setScheduleModal({ candidate: c, email: c.email ?? '', slots: ['', '', ''], sending: false, sent: false, error: null, noCalWarning: true })
+                }
+              }
+
               return (
                 <div key={c.id} className="candidate-row" style={{ cursor: 'default' }}>
                   <div className="c-info">
                     <div className="c-name">{c.full_name}{c.source === 'manually_added' && <span className="badge badge-blue" style={{ fontSize: 9, marginLeft: 6 }}>Manual</span>}</div>
                     <div className="c-meta">{c.candidate_role} · {c.total_years}y</div>
+                    {calConfirmed && booking.scheduled_at && (
+                      <div style={{ fontSize: 11, color: 'var(--green)', marginTop: 3, fontFamily: 'var(--font-mono)' }}>
+                        {new Date(booking.scheduled_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                      </div>
+                    )}
                   </div>
                   <div className="c-score" style={{ gap: 6, flexWrap: 'wrap' }}>
-                    {!scheduled && !completed && (
+                    {!scheduled && !completed && !calPending && !calConfirmed && !calCancelled && (
                       <>
                         <span className="badge" style={{ color: 'var(--text-3)', background: 'var(--surface2)' }}>Not Scheduled</span>
-                        <button className="btn btn-secondary" style={{ fontSize: 10, padding: '2px 8px' }} onClick={() => setScheduleModal({ candidate: c, email: c.email ?? '', slots: ['', '', ''], sending: false, sent: false, error: null })}>📅 Schedule</button>
+                        <button className="btn btn-secondary" style={{ fontSize: 10, padding: '2px 8px' }} onClick={openSchedule}>📅 Schedule</button>
                       </>
                     )}
-                    {scheduled && !completed && (
+                    {calPending && (
+                      <>
+                        <span className="badge" style={{ color: 'var(--amber)', background: 'var(--amber-d)', border: '1px solid var(--amber)' }}>Awaiting Scheduling</span>
+                        <button className="btn btn-secondary" style={{ fontSize: 10, padding: '2px 8px' }} onClick={openSchedule}>↩ Resend</button>
+                      </>
+                    )}
+                    {calConfirmed && !completed && (
+                      <>
+                        <span className="badge badge-green">Interview Scheduled</span>
+                        {booking.meeting_link && <a href={booking.meeting_link} target="_blank" rel="noopener noreferrer" className="btn btn-primary" style={{ fontSize: 10, padding: '2px 8px', textDecoration: 'none' }}>🎥 Join Call</a>}
+                        <button className="btn btn-secondary" style={{ fontSize: 10, padding: '2px 8px' }} onClick={() => markLiveComplete(c)}>✓ Mark Done</button>
+                      </>
+                    )}
+                    {calCancelled && !completed && (
+                      <>
+                        <span className="badge badge-red">Cancelled</span>
+                        <button className="btn btn-secondary" style={{ fontSize: 10, padding: '2px 8px' }} onClick={openSchedule}>📅 Reschedule</button>
+                      </>
+                    )}
+                    {scheduled && !completed && !calConfirmed && !calCancelled && !calPending && (
                       <>
                         <span className="badge badge-blue">Scheduled</span>
                         <button className="btn btn-primary" style={{ fontSize: 10, padding: '2px 8px' }} onClick={() => setLiveCallModal({ candidate: c })}>🎥 Join Call</button>
@@ -1721,6 +1815,37 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
         </div>
       )}
 
+      {/* ── Cal.com Link Modal ── */}
+      {calLinkModal && (
+        <div style={MO}>
+          <div style={{ ...MB, width: 520 }}>
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>Send Scheduling Link</div>
+              <div style={{ fontSize: 13, color: 'var(--text-3)' }}>{calLinkModal.candidate.full_name} — candidate picks their own slot</div>
+            </div>
+            <div><label style={ML}>Candidate Email</label><input style={MI} value={calLinkModal.email} onChange={e => setCalLinkModal(m => ({ ...m, email: e.target.value }))} placeholder="candidate@email.com" /></div>
+            <div>
+              <label style={ML}>Scheduling Link</label>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input style={{ ...MI, flex: 1, color: 'var(--text-3)', fontSize: 11 }} value={calLinkModal.link} readOnly />
+                <button className="btn btn-secondary" style={{ fontSize: 10, padding: '4px 10px', flexShrink: 0 }} onClick={() => navigator.clipboard.writeText(calLinkModal.link).catch(() => {})}>Copy</button>
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 4 }}>The candidate books directly on Cal.com — you'll be notified via webhook when confirmed.</div>
+            </div>
+            {calLinkModal.error && <div style={{ fontSize: 12, color: 'var(--red)' }}>⚠ {calLinkModal.error}</div>}
+            {calLinkModal.sent && <div style={{ fontSize: 12, color: 'var(--green)' }}>✓ Scheduling link emailed — awaiting candidate booking</div>}
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button className="btn btn-secondary" onClick={() => setCalLinkModal(null)}>{calLinkModal.sent ? 'Close' : 'Cancel'}</button>
+              {!calLinkModal.sent && (
+                <button className="btn btn-primary" disabled={calLinkModal.sending || !calLinkModal.email.trim()} onClick={sendCalInvite}>
+                  {calLinkModal.sending ? <><span className="spinner" style={{ width: 11, height: 11 }} /> Sending…</> : '📅 Email Scheduling Link'}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Schedule Modal (Feature 4) ── */}
       {scheduleModal && (
         <div style={MO}>
@@ -1729,6 +1854,11 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
               <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>Schedule Live Interview</div>
               <div style={{ fontSize: 13, color: 'var(--text-3)' }}>{scheduleModal.candidate.full_name} — propose 3 time slots</div>
             </div>
+            {scheduleModal.noCalWarning && (
+              <div style={{ fontSize: 12, color: 'var(--amber)', background: 'var(--amber-d)', border: '1px solid var(--amber)', borderRadius: 'var(--r)', padding: '8px 12px' }}>
+                Set up Cal.com in integrations for self-scheduling — using manual slots instead.
+              </div>
+            )}
             <div><label style={ML}>Candidate Email</label><input style={MI} value={scheduleModal.email} onChange={e => setScheduleModal(m => ({ ...m, email: e.target.value }))} placeholder="candidate@email.com" /></div>
             {[0, 1, 2].map(i => (
               <div key={i}>

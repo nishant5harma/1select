@@ -45,13 +45,14 @@ export default function CandidateDashboard() {
   const [poolEntry,     setPoolEntry]     = useState(null)
   const [matches,       setMatches]       = useState([])
   const [applications,  setApplications]  = useState([])
+  const [upcomingBooking, setUpcomingBooking] = useState(null)
   const [loading,       setLoading]       = useState(true)
   const [bannerDismissed, setBannerDismissed] = useState(false)
 
   useEffect(() => { if (user) load() }, [user])
 
   async function load() {
-    try { // fix: wrap in try/finally so setLoading(false) always fires on query error
+    try {
     const { data: pool } = await supabase
       .from('talent_pool')
       .select('*')
@@ -60,17 +61,25 @@ export default function CandidateDashboard() {
 
     setPoolEntry(pool)
 
-    const [matchRes, appRes] = await Promise.all([
+    const [matchRes, appRes, bookingRes] = await Promise.all([
       pool
         ? supabase.from('job_matches').select('*, jobs(id, title, experience_years, required_skills)').eq('talent_id', pool.id).order('match_score', { ascending: false })
         : Promise.resolve({ data: [] }),
       supabase.from('candidates').select('id, full_name, candidate_role, match_pass, match_score, scores, final_decision, created_at, jobs(id, title)').eq('candidate_user_id', user.id).order('created_at', { ascending: false }),
+      // Load upcoming confirmed booking (by direct application or talent pool match)
+      supabase.from('interview_bookings')
+        .select('*, jobs(title)')
+        .eq('status', 'confirmed')
+        .order('scheduled_at', { ascending: true })
+        .limit(1)
+        .maybeSingle(),
     ])
 
     setMatches(matchRes.data ?? [])
     setApplications(appRes.data ?? [])
+    setUpcomingBooking(bookingRes.data ?? null)
     } finally {
-      setLoading(false) // fix: always clear loading even when queries fail
+      setLoading(false)
     }
   }
 
@@ -144,6 +153,37 @@ export default function CandidateDashboard() {
         <div style={{ padding: '12px 16px', background: 'var(--surface)', border: '1px solid var(--border)', borderLeft: '3px solid var(--accent)', borderRadius: 8, marginBottom: 20, fontSize: 13, color: 'var(--text-2)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span>Your profile is {score}% complete — a complete profile improves your matching quality.</span>
           <button className="btn btn-secondary" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => navigate('/candidate/profile')}>Complete Profile →</button>
+        </div>
+      )}
+
+      {/* Upcoming Interview */}
+      {upcomingBooking && (
+        <div className="section-card" style={{ marginBottom: 20, borderLeft: '3px solid var(--green)' }}>
+          <div className="section-card-head">
+            <h3 style={{ color: 'var(--green)' }}>Upcoming Interview</h3>
+            <span className="badge badge-green">Confirmed</span>
+          </div>
+          <div style={{ padding: '16px 20px' }}>
+            <div style={{ fontSize: 15, fontWeight: 500, color: 'var(--text)', marginBottom: 4 }}>
+              {upcomingBooking.jobs?.title ?? 'Live Interview'}
+            </div>
+            {upcomingBooking.scheduled_at && (
+              <div style={{ fontSize: 13, color: 'var(--text-2)', marginBottom: 14 }}>
+                {new Date(upcomingBooking.scheduled_at).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+              </div>
+            )}
+            {upcomingBooking.meeting_link && (
+              <a
+                href={upcomingBooking.meeting_link}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn btn-primary"
+                style={{ textDecoration: 'none', fontSize: 13 }}
+              >
+                🎥 Join Meeting
+              </a>
+            )}
+          </div>
         </div>
       )}
 

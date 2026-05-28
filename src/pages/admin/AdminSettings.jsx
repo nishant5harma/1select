@@ -80,6 +80,48 @@ export default function AdminSettings() {
   const [deleteModal, setDeleteModal] = useState(null)
   const [deleting,    setDeleting]    = useState(false)
 
+  // ── Cal.com Scheduling ───────────────────────────────────────────────────
+  const [calRecruiters,     setCalRecruiters]     = useState([])
+  const [calLoading,        setCalLoading]         = useState(true)
+  const [calEdits,          setCalEdits]           = useState({})  // recruiterId → { cal_username, cal_event_type_slug }
+  const [calSaving,         setCalSaving]          = useState({})  // recruiterId → bool
+  const [calSaved,          setCalSaved]           = useState({})  // recruiterId → bool
+
+  useEffect(() => { loadCalRecruiters() }, [])
+
+  async function loadCalRecruiters() {
+    setCalLoading(true)
+    try {
+      const { data } = await supabase
+        .from('profiles')
+        .select('id, full_name, email, cal_username, cal_event_type_slug')
+        .eq('user_role', 'recruiter')
+        .order('full_name')
+      setCalRecruiters(data ?? [])
+      const edits = {}
+      ;(data ?? []).forEach(r => {
+        edits[r.id] = { cal_username: r.cal_username ?? '', cal_event_type_slug: r.cal_event_type_slug ?? '30min' }
+      })
+      setCalEdits(edits)
+    } finally {
+      setCalLoading(false)
+    }
+  }
+
+  async function saveCalRecruiter(recruiterId) {
+    const vals = calEdits[recruiterId]
+    if (!vals) return
+    setCalSaving(p => ({ ...p, [recruiterId]: true }))
+    await supabase.from('profiles').update({
+      cal_username:        vals.cal_username.trim()        || null,
+      cal_event_type_slug: vals.cal_event_type_slug.trim() || '30min',
+    }).eq('id', recruiterId)
+    setCalSaving(p => ({ ...p, [recruiterId]: false }))
+    setCalSaved(p => ({ ...p, [recruiterId]: true }))
+    setTimeout(() => setCalSaved(p => ({ ...p, [recruiterId]: false })), 3000)
+    await loadCalRecruiters()
+  }
+
   // ── Admin Users ───────────────────────────────────────────────────────────
   const [admins,          setAdmins]          = useState([])
   const [adminsLoading,   setAdminsLoading]   = useState(true)
@@ -257,6 +299,110 @@ export default function AdminSettings() {
               {saved && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--green)', letterSpacing: '0.06em' }}>✓ Saved</span>}
             </div>
           </form>
+        </div>
+      </div>
+
+      {/* Cal.com Scheduling */}
+      <div className="section-card" style={{ marginBottom: 16 }}>
+        <div className="section-card-head">
+          <h3>Cal.com Scheduling</h3>
+        </div>
+        <div className="section-card-body">
+          <p style={{ fontSize: 13, color: 'var(--text-2)', marginBottom: 16, lineHeight: 1.6 }}>
+            Each recruiter must connect their Cal.com account so candidates can self-schedule live interviews. Set the Cal.com username and event type slug for each recruiter below.
+          </p>
+
+          {/* Webhook URL */}
+          <div style={{ marginBottom: 20, padding: '12px 16px', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 'var(--r)' }}>
+            <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-3)', marginBottom: 6 }}>Cal.com Webhook URL</div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <code style={{ flex: 1, fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-2)', wordBreak: 'break-all' }}>
+                {`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/cal-webhook`}
+              </code>
+              <button
+                className="btn btn-secondary"
+                style={{ fontSize: 10, padding: '3px 10px', flexShrink: 0 }}
+                onClick={() => navigator.clipboard.writeText(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/cal-webhook`).catch(() => {})}
+              >
+                Copy
+              </button>
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 6 }}>
+              Add this in Cal.com → Settings → Webhooks. Select triggers: BOOKING_CREATED, BOOKING_CANCELLED, BOOKING_RESCHEDULED.
+            </div>
+          </div>
+
+          {/* Recruiter table */}
+          {calLoading ? (
+            <div style={{ padding: '16px 0' }}><span className="spinner" /></div>
+          ) : calRecruiters.length === 0 ? (
+            <div style={{ fontSize: 13, color: 'var(--text-3)', padding: '12px 0' }}>No recruiters found. Invite recruiters first.</div>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                    {['Recruiter', 'Cal.com Username', 'Event Type Slug', ''].map(h => (
+                      <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 10, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-3)', fontWeight: 400 }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {calRecruiters.map(r => {
+                    const edit  = calEdits[r.id] ?? { cal_username: '', cal_event_type_slug: '30min' }
+                    const saved = calSaved[r.id]
+                    return (
+                      <tr key={r.id} style={{ borderBottom: '1px solid var(--border2)' }}>
+                        <td style={{ padding: '10px 12px' }}>
+                          <div style={{ fontWeight: 500 }}>{r.full_name || '—'}</div>
+                          <div style={{ fontSize: 11, color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>{r.email}</div>
+                        </td>
+                        <td style={{ padding: '10px 12px' }}>
+                          <input
+                            type="text"
+                            placeholder="e.g. jane-smith"
+                            value={edit.cal_username}
+                            onChange={e => setCalEdits(p => ({ ...p, [r.id]: { ...edit, cal_username: e.target.value } }))}
+                            style={{ width: '100%', padding: '5px 8px', fontSize: 12, border: '1px solid var(--border2)', borderRadius: 'var(--r)', background: 'var(--surface)', color: 'var(--text)' }}
+                          />
+                        </td>
+                        <td style={{ padding: '10px 12px' }}>
+                          <input
+                            type="text"
+                            placeholder="30min"
+                            value={edit.cal_event_type_slug}
+                            onChange={e => setCalEdits(p => ({ ...p, [r.id]: { ...edit, cal_event_type_slug: e.target.value } }))}
+                            style={{ width: '100%', padding: '5px 8px', fontSize: 12, border: '1px solid var(--border2)', borderRadius: 'var(--r)', background: 'var(--surface)', color: 'var(--text)' }}
+                          />
+                        </td>
+                        <td style={{ padding: '10px 12px', textAlign: 'right' }}>
+                          <div style={{ display: 'flex', gap: 6, alignItems: 'center', justifyContent: 'flex-end' }}>
+                            {saved && <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--green)' }}>✓ Saved</span>}
+                            <button
+                              className="btn btn-primary"
+                              style={{ fontSize: 10, padding: '3px 10px' }}
+                              disabled={calSaving[r.id]}
+                              onClick={() => saveCalRecruiter(r.id)}
+                            >
+                              {calSaving[r.id] ? <><span className="spinner" style={{ width: 10, height: 10 }} /></> : 'Save'}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          <div style={{ marginTop: 16, fontSize: 12, color: 'var(--text-3)', lineHeight: 1.7 }}>
+            <strong style={{ color: 'var(--text-2)' }}>How to set up:</strong>{' '}
+            1. Recruiter creates a free Cal.com account and copies their username (e.g. <code style={{ fontFamily: 'var(--font-mono)' }}>jane-smith</code>).{' '}
+            2. In Cal.com, go to <em>Event Types</em> and note the slug (e.g. <code style={{ fontFamily: 'var(--font-mono)' }}>30min</code> or <code style={{ fontFamily: 'var(--font-mono)' }}>interview</code>).{' '}
+            3. Enter both fields above and click Save.{' '}
+            4. Once saved, the pipeline Schedule button will generate a Cal.com self-scheduling link for candidates instead of the manual slot picker.
+          </div>
         </div>
       </div>
 
