@@ -4,13 +4,18 @@ import { supabase } from './supabase'
 const AuthContext = createContext(null)
 
 // Detect Supabase invite/recovery tokens in the URL before any auth init.
-// When present, we must sign out any existing session so the invite is
-// processed as the invited user, not whoever is currently logged in.
 const _urlHash   = new URLSearchParams(window.location.hash.slice(1))
 const _urlSearch = new URLSearchParams(window.location.search)
 const _urlType   = _urlHash.get('type') || _urlSearch.get('type')
-const HAS_INVITE_TOKEN = (_urlType === 'invite' || _urlType === 'recovery') &&
-  !!(_urlHash.get('access_token') || _urlSearch.get('code'))
+const _hasToken  = !!(_urlHash.get('access_token') || _urlSearch.get('code'))
+// Invite: sign out any existing session first so the new user's session takes
+// over rather than whoever happens to be logged in already.
+const HAS_INVITE_TOKEN = (_urlType === 'invite') && _hasToken
+// Recovery: do NOT sign out. Calling signOut() clears the PKCE code verifier
+// stored in localStorage, which breaks the code→session exchange and causes
+// updateUser() to fail with "An error has occurred". Let the SDK exchange the
+// ?code= naturally and fire PASSWORD_RECOVERY.
+const HAS_RECOVERY_TOKEN = (_urlType === 'recovery') && _hasToken
 
 export function AuthProvider({ children }) {
   const [user, setUser]                     = useState(null)
@@ -43,13 +48,20 @@ export function AuthProvider({ children }) {
     let cancelled = false
 
     async function init() {
-      // If an invite or recovery token is in the URL, sign out any existing
-      // session first so the token is processed as the invited user, not
-      // whoever is already logged in (e.g. a demo/admin account).
+      // Invite: sign out any existing session so the invited user's token is
+      // processed fresh, not on top of an existing (possibly different) session.
       if (HAS_INVITE_TOKEN) {
         await supabase.auth.signOut()
         if (!cancelled) setLoading(false)
         return  // onAuthStateChange handles the SIGNED_IN from the URL token
+      }
+
+      // Recovery: don't sign out — just yield to the SDK. The SDK exchanges the
+      // ?code= for a session and fires PASSWORD_RECOVERY. Login.jsx listens for
+      // that event to show the new-password form.
+      if (HAS_RECOVERY_TOKEN) {
+        if (!cancelled) setLoading(false)
+        return
       }
 
       try {
@@ -92,10 +104,13 @@ export function AuthProvider({ children }) {
 
       if (!session?.user) return
 
-      if (event === 'SIGNED_IN') {
+      if (event === 'SIGNED_IN' || event === 'PASSWORD_RECOVERY') {
         setUser(session.user)
         // SDK v2 fires SIGNED_IN on every tab focus — only re-fetch profile on a
         // genuinely new user (different ID or first login since page load).
+        // PASSWORD_RECOVERY is included here because the SDK fires it instead of
+        // SIGNED_IN for recovery flows, and we need the profile loaded so the
+        // post-reset redirect lands on the correct role dashboard.
         if (profileFetchedForRef.current !== session.user.id) {
           profileFetchedForRef.current = session.user.id
           setProfileLoading(true)
@@ -104,7 +119,7 @@ export function AuthProvider({ children }) {
         return
       }
 
-      // TOKEN_REFRESHED, USER_UPDATED, INITIAL_SESSION, PASSWORD_RECOVERY, etc.
+      // TOKEN_REFRESHED, USER_UPDATED, INITIAL_SESSION, etc.
       // Just keep the user object current — don't disturb profile or trigger loading
       setUser(session.user)
     })
