@@ -43,7 +43,7 @@ export default function ClientSettings() {
     setInviting(true); setInviteMsg('')
     const { data: sessionData } = await supabase.auth.getSession()
     const session = sessionData?.session
-    const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/invite-user`, {
+    const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/invite-stakeholder`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -52,9 +52,7 @@ export default function ClientSettings() {
       },
       body: JSON.stringify({
         email:          inviteEmail.trim(),
-        contact_name:   inviteName.trim() || inviteEmail.split('@')[0],
-        company_name:   profile?.company_name ?? '',
-        role:           'client',
+        name:           inviteName.trim() || inviteEmail.split('@')[0],
         stakeholder_of: user.id,
       }),
     })
