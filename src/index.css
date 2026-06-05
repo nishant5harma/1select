@@ -3,24 +3,24 @@
 /* ─── Variables ─────────────────────────────────────────── */
 :root {
   /* Page chrome & sidebar */
-  --bg:            #0D0F1A;
-  --navy:          #0D0F1A;
-  --navy-surface:  #131629;
-  --navy-border:   #1E2240;
+  --bg:            #111425;
+  --navy:          #111425;
+  --navy-surface:  #161A30;
+  --navy-border:   #222640;
   --navy-text:     #6B7299;
   --navy-text-2:   #3A4060;
 
   /* Content surfaces (cream/parchment) */
-  --surface:   #EDE8DF;
-  --surface-2: #E6E0D6;
-  --surface-3: #DDD6CA;
+  --surface:   #E8E2D6;
+  --surface-2: #DFD8CB;
+  --surface-3: #D6CEBI;
   --border:    #E2DDD5;
   --border-2:  #D4CEC4;
 
   /* Text colours (for use on light surfaces) */
-  --text:   #1A1506;
-  --text-2: #5A5040;
-  --text-3: #7A7060;
+  --text:   #1C1814;
+  --text-2: #4A4035;
+  --text-3: #6B6050;
 
   /* Accent */
   --accent:       #CD7F45;
