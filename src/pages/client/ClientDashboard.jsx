@@ -214,7 +214,7 @@ export default function ClientDashboard() {
     <div className="page">
       {showWelcome && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000, padding: 24 }}>
-          <div style={{ background: 'var(--surface2)', width: '100%', maxWidth: 480, border: '1px solid var(--border)', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ background: 'var(--surface)', width: '100%', maxWidth: 480, border: '1px solid var(--border)', display: 'flex', flexDirection: 'column' }}>
             <div style={{ padding: '28px 32px 0' }}>
               <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.2em', color: 'var(--accent)', marginBottom: 8 }}>One Select</div>
               <h2 style={{ fontFamily: 'var(--font-head)', fontWeight: 300, fontSize: 24, margin: 0, color: 'var(--text)' }}>Welcome to One Select</h2>

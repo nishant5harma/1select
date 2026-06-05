@@ -72,7 +72,7 @@ function VideoModal({ candidate, onClose }) {
       style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000, padding: 20 }}
       onClick={e => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div style={{ background: 'var(--surface2)', width: '100%', maxWidth: 860, maxHeight: '90vh', overflow: 'auto', display: 'flex', flexDirection: 'column', border: '1px solid var(--border)' }}>
+      <div style={{ background: 'var(--surface)', width: '100%', maxWidth: 860, maxHeight: '90vh', overflow: 'auto', display: 'flex', flexDirection: 'column', border: '1px solid var(--border)' }}>
 
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 28px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
@@ -186,7 +186,7 @@ function CVModal({ candidate, onClose }) {
       style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2100, padding: 20 }}
       onClick={e => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div style={{ background: 'var(--surface2)', width: '100%', maxWidth: 760, maxHeight: '88vh', display: 'flex', flexDirection: 'column', border: '1px solid var(--border)' }}>
+      <div style={{ background: 'var(--surface)', width: '100%', maxWidth: 760, maxHeight: '88vh', display: 'flex', flexDirection: 'column', border: '1px solid var(--border)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '18px 24px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
           <div>
             <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--text-3)', marginBottom: 3 }}>CV / Resume</div>
@@ -236,7 +236,7 @@ function CandidateProfile({ candidate, onBack, onWatch, onViewCV, onOffer, onDec
           <button
             className="btn btn-primary"
             onClick={onWatch}
-            style={{ background: '#B8924A', borderColor: '#B8924A' }}
+            style={{ background: 'var(--accent)', borderColor: 'var(--accent)' }}
           >
             ▶ Watch Interview
           </button>
@@ -608,14 +608,14 @@ export default function ClientCandidates() {
         {offerModal && (
           <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2200, padding: 20 }}
             onClick={e => { if (e.target === e.currentTarget) setOfferModal(null) }}>
-            <div style={{ background: '#F8F7F4', width: '100%', maxWidth: 460, padding: 28, border: '1px solid #E8E4DC', display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div style={{ background: 'var(--surface)', width: '100%', maxWidth: 460, padding: 28, border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 16 }}>
               <div>
-                <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.12em', color: '#9CA3AF', marginBottom: 4 }}>Make Offer</div>
-                <div style={{ fontSize: 17, fontFamily: 'Georgia, serif', color: '#2D3748' }}>{offerModal.candidate.full_name}</div>
-                <div style={{ fontSize: 13, color: '#9CA3AF', marginTop: 2 }}>{offerModal.candidate.candidate_role}</div>
+                <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--text-3)', marginBottom: 4 }}>Make Offer</div>
+                <div style={{ fontSize: 17, fontFamily: 'Georgia, serif', color: 'var(--text)' }}>{offerModal.candidate.full_name}</div>
+                <div style={{ fontSize: 13, color: 'var(--text-3)', marginTop: 2 }}>{offerModal.candidate.candidate_role}</div>
               </div>
               <div>
-                <label style={{ fontSize: 11, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#9CA3AF', display: 'block', marginBottom: 6 }}>
+                <label style={{ fontSize: 11, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-3)', display: 'block', marginBottom: 6 }}>
                   Note (optional)
                 </label>
                 <textarea
@@ -623,7 +623,7 @@ export default function ClientCandidates() {
                   value={offerModal.note}
                   onChange={e => setOfferModal(m => ({ ...m, note: e.target.value }))}
                   placeholder="Any message or next steps for the recruiter…"
-                  style={{ width: '100%', padding: '9px 12px', border: '1px solid #E8E4DC', background: 'white', fontSize: 13, resize: 'vertical', boxSizing: 'border-box', fontFamily: 'var(--font-body)' }}
+                  style={{ width: '100%', padding: '9px 12px', border: '1px solid var(--border)', background: 'var(--surface-2)', fontSize: 13, resize: 'vertical', boxSizing: 'border-box', fontFamily: 'var(--font-body)' }}
                 />
               </div>
               {offerModal.error && <div style={{ fontSize: 12, color: 'var(--red)' }}>{offerModal.error}</div>}
@@ -792,7 +792,7 @@ export default function ClientCandidates() {
                   {hasVideo && (
                     <button
                       className="btn btn-secondary"
-                      style={{ fontSize: 11, padding: '4px 10px', color: '#B8924A', borderColor: '#B8924A' }}
+                      style={{ fontSize: 11, padding: '4px 10px', color: 'var(--accent)', borderColor: 'var(--accent)' }}
                       onClick={e => { e.stopPropagation(); setWatchId(c.id) }}
                     >
                       ▶ Watch
@@ -916,59 +916,59 @@ export default function ClientCandidates() {
             style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', zIndex: 2100, padding: '40px 20px', overflowY: 'auto' }}
             onClick={e => { if (e.target === e.currentTarget) setShowCompare(false) }}
           >
-            <div style={{ background: '#F8F7F4', width: '100%', maxWidth: 960, border: '1px solid #E8E4DC', display: 'flex', flexDirection: 'column' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '18px 24px', borderBottom: '1px solid #E8E4DC' }}>
+            <div style={{ background: 'var(--surface)', width: '100%', maxWidth: 960, border: '1px solid var(--border)', display: 'flex', flexDirection: 'column' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '18px 24px', borderBottom: '1px solid var(--border)' }}>
                 <div>
-                  <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.12em', color: '#9CA3AF', marginBottom: 3 }}>Side-by-Side</div>
-                  <div style={{ fontSize: 17, fontFamily: 'Georgia, serif', color: '#2D3748' }}>Candidate Comparison</div>
+                  <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--text-3)', marginBottom: 3 }}>Side-by-Side</div>
+                  <div style={{ fontSize: 17, fontFamily: 'Georgia, serif', color: 'var(--text)' }}>Candidate Comparison</div>
                 </div>
-                <button onClick={() => setShowCompare(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: '#9CA3AF', lineHeight: 1 }}>×</button>
+                <button onClick={() => setShowCompare(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: 'var(--text-3)', lineHeight: 1 }}>×</button>
               </div>
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                   <thead>
                     <tr>
-                      <th style={{ padding: '12px 20px', textAlign: 'left', fontFamily: 'var(--font-mono)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#9CA3AF', background: '#F8F7F4', width: 140, borderBottom: '1px solid #E8E4DC' }}>Metric</th>
+                      <th style={{ padding: '12px 20px', textAlign: 'left', fontFamily: 'var(--font-mono)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-3)', background: 'var(--surface)', width: 140, borderBottom: '1px solid var(--border)' }}>Metric</th>
                       {compared.map(c => (
-                        <th key={c.id} style={{ padding: '12px 16px', textAlign: 'center', fontFamily: 'Georgia, serif', fontWeight: 400, color: '#2D3748', background: compareIds[0] === c.id ? 'rgba(184,146,74,0.06)' : '#F8F7F4', borderBottom: '1px solid #E8E4DC', borderLeft: '1px solid #E8E4DC' }}>
+                        <th key={c.id} style={{ padding: '12px 16px', textAlign: 'center', fontFamily: 'Georgia, serif', fontWeight: 400, color: 'var(--text)', background: compareIds[0] === c.id ? 'var(--accent-d)' : 'var(--surface)', borderBottom: '1px solid var(--border)', borderLeft: '1px solid var(--border)' }}>
                           <div style={{ fontWeight: 500 }}>{c.full_name}</div>
-                          <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: '#9CA3AF', fontWeight: 400, marginTop: 2 }}>{c.candidate_role}</div>
+                          <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-3)', fontWeight: 400, marginTop: 2 }}>{c.candidate_role}</div>
                         </th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
                     {[
-                      { label: 'Screen Score', render: c => c.match_score != null ? <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: dimColor(c.match_score) }}>{(c.match_score / 10).toFixed(1)}/10</span> : <span style={{ color: '#9CA3AF' }}>—</span> },
-                      { label: 'Interview Score', render: c => c.scores?.overallScore != null ? <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: dimColor(c.scores.overallScore) }}>{(c.scores.overallScore / 10).toFixed(1)}/10</span> : <span style={{ color: '#9CA3AF' }}>—</span> },
-                      { label: 'Recommendation', render: c => c.scores?.recommendation ? <span style={{ fontWeight: 600, color: REC_COLOR[c.scores.recommendation], fontFamily: 'var(--font-mono)', fontSize: 11 }}>{c.scores.recommendation}</span> : <span style={{ color: '#9CA3AF' }}>—</span> },
+                      { label: 'Screen Score', render: c => c.match_score != null ? <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: dimColor(c.match_score) }}>{(c.match_score / 10).toFixed(1)}/10</span> : <span style={{ color: 'var(--text-3)' }}>—</span> },
+                      { label: 'Interview Score', render: c => c.scores?.overallScore != null ? <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: dimColor(c.scores.overallScore) }}>{(c.scores.overallScore / 10).toFixed(1)}/10</span> : <span style={{ color: 'var(--text-3)' }}>—</span> },
+                      { label: 'Recommendation', render: c => c.scores?.recommendation ? <span style={{ fontWeight: 600, color: REC_COLOR[c.scores.recommendation], fontFamily: 'var(--font-mono)', fontSize: 11 }}>{c.scores.recommendation}</span> : <span style={{ color: 'var(--text-3)' }}>—</span> },
                       { label: 'Experience', render: c => c.total_years != null ? `${c.total_years}y` : '—' },
                       ...DIMS.map(([key, label]) => ({
                         label,
                         render: c => {
                           const v = c.scores?.[key]
-                          return v != null ? <span style={{ fontFamily: 'var(--font-mono)', color: dimColor(v) }}>{(v / 10).toFixed(1)}</span> : <span style={{ color: '#9CA3AF' }}>—</span>
+                          return v != null ? <span style={{ fontFamily: 'var(--font-mono)', color: dimColor(v) }}>{(v / 10).toFixed(1)}</span> : <span style={{ color: 'var(--text-3)' }}>—</span>
                         },
                       })),
                       { label: 'Skills', render: c => (c.skills ?? []).length > 0 ? (
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, justifyContent: 'center' }}>
-                          {(c.skills ?? []).slice(0, 6).map(sk => <span key={sk} style={{ fontSize: 10, fontFamily: 'var(--font-mono)', padding: '2px 6px', background: 'rgba(0,0,0,0.05)', borderRadius: 3 }}>{sk}</span>)}
-                          {(c.skills ?? []).length > 6 && <span style={{ fontSize: 10, color: '#9CA3AF' }}>+{(c.skills ?? []).length - 6}</span>}
+                          {(c.skills ?? []).slice(0, 6).map(sk => <span key={sk} style={{ fontSize: 10, fontFamily: 'var(--font-mono)', padding: '2px 6px', background: 'var(--accent-d)', borderRadius: 3 }}>{sk}</span>)}
+                          {(c.skills ?? []).length > 6 && <span style={{ fontSize: 10, color: 'var(--text-3)' }}>+{(c.skills ?? []).length - 6}</span>}
                         </div>
-                      ) : <span style={{ color: '#9CA3AF' }}>—</span> },
+                      ) : <span style={{ color: 'var(--text-3)' }}>—</span> },
                       { label: 'Status', render: c => <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)' }}>{getStatus(c)}</span> },
                     ].map(({ label, render }) => (
-                      <tr key={label} style={{ borderBottom: '1px solid #E8E4DC' }}>
-                        <td style={{ padding: '11px 20px', fontFamily: 'var(--font-mono)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#9CA3AF', background: '#F8F7F4' }}>{label}</td>
+                      <tr key={label} style={{ borderBottom: '1px solid var(--border)' }}>
+                        <td style={{ padding: '11px 20px', fontFamily: 'var(--font-mono)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-3)', background: 'var(--surface)' }}>{label}</td>
                         {compared.map(c => (
-                          <td key={c.id} style={{ padding: '11px 16px', textAlign: 'center', borderLeft: '1px solid #E8E4DC', background: compareIds[0] === c.id ? 'rgba(184,146,74,0.04)' : 'white' }}>{render(c)}</td>
+                          <td key={c.id} style={{ padding: '11px 16px', textAlign: 'center', borderLeft: '1px solid var(--border)', background: compareIds[0] === c.id ? 'var(--accent-d)' : 'var(--surface)' }}>{render(c)}</td>
                         ))}
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-              <div style={{ padding: '14px 24px', borderTop: '1px solid #E8E4DC', display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <div style={{ padding: '14px 24px', borderTop: '1px solid var(--border)', display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
                 <button className="btn btn-secondary" onClick={() => { setShowCompare(false); setCompareIds([]) }} style={{ fontSize: 12 }}>Clear & Close</button>
                 <button className="btn btn-secondary" onClick={() => setShowCompare(false)} style={{ fontSize: 12 }}>Close</button>
               </div>
@@ -980,17 +980,17 @@ export default function ClientCandidates() {
       {offerModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2200, padding: 20 }}
           onClick={e => { if (e.target === e.currentTarget) setOfferModal(null) }}>
-          <div style={{ background: '#F8F7F4', width: '100%', maxWidth: 460, padding: 28, border: '1px solid #E8E4DC', display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ background: 'var(--surface)', width: '100%', maxWidth: 460, padding: 28, border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div>
-              <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.12em', color: '#9CA3AF', marginBottom: 4 }}>Make Offer</div>
-              <div style={{ fontSize: 17, fontFamily: 'Georgia, serif', color: '#2D3748' }}>{offerModal.candidate.full_name}</div>
-              <div style={{ fontSize: 13, color: '#9CA3AF', marginTop: 2 }}>{offerModal.candidate.candidate_role}</div>
+              <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--text-3)', marginBottom: 4 }}>Make Offer</div>
+              <div style={{ fontSize: 17, fontFamily: 'Georgia, serif', color: 'var(--text)' }}>{offerModal.candidate.full_name}</div>
+              <div style={{ fontSize: 13, color: 'var(--text-3)', marginTop: 2 }}>{offerModal.candidate.candidate_role}</div>
             </div>
             <div>
-              <label style={{ fontSize: 11, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#9CA3AF', display: 'block', marginBottom: 6 }}>Note (optional)</label>
+              <label style={{ fontSize: 11, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-3)', display: 'block', marginBottom: 6 }}>Note (optional)</label>
               <textarea rows={3} value={offerModal.note} onChange={e => setOfferModal(m => ({ ...m, note: e.target.value }))}
                 placeholder="Any message or next steps for the recruiter…"
-                style={{ width: '100%', padding: '9px 12px', border: '1px solid #E8E4DC', background: 'white', fontSize: 13, resize: 'vertical', boxSizing: 'border-box', fontFamily: 'var(--font-body)' }} />
+                style={{ width: '100%', padding: '9px 12px', border: '1px solid var(--border)', background: 'var(--surface-2)', fontSize: 13, resize: 'vertical', boxSizing: 'border-box', fontFamily: 'var(--font-body)' }} />
             </div>
             {offerModal.error && <div style={{ fontSize: 12, color: 'var(--red)' }}>{offerModal.error}</div>}
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
