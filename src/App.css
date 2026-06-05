@@ -352,7 +352,7 @@
 
 /* ── Select ──────────────────────────────────────────────────────── */
 select {
-  background: var(--surface2); border: 1px solid var(--border);
+  background: var(--surface-2); border: 1px solid var(--border);
   border-radius: var(--r); color: var(--text); font-family: var(--font-body); font-size: 14px;
   font-weight: 400; padding: 10px 14px; outline: none; width: 100%; cursor: pointer;
   transition: border-color 0.15s; appearance: none;
@@ -360,7 +360,7 @@ select {
   background-repeat: no-repeat; background-position: right 12px center;
   padding-right: 32px;
 }
-select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-d); }
+select:focus { background: var(--surface-2); border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-d); outline: none; }
 select option { background: var(--surface2); color: var(--text); }
 
 /* ── Transcript chat ─────────────────────────────────────────────── */

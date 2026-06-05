@@ -52,12 +52,14 @@ export default function AdminLayout() {
 
         <div className="sidebar-footer" style={{ flexShrink: 0, borderTop: '1px solid var(--border)' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-            <div className="sidebar-user-email" style={{ margin: 0 }}>{user?.email}</div>
+            <div className="sidebar-user-email" style={{ margin: 0, color: 'var(--navy-text)' }}>{user?.email}</div>
             <NotificationBell />
           </div>
           <button
             className="btn btn-secondary"
-            style={{ width: '100%', justifyContent: 'center' }}
+            style={{ width: '100%', justifyContent: 'center', color: '#6878A0' }}
+            onMouseEnter={e => e.currentTarget.style.color = 'var(--accent)'}
+            onMouseLeave={e => e.currentTarget.style.color = '#6878A0'}
             onClick={handleSignOut}
           >
             Sign out
