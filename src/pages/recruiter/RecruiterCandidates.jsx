@@ -151,7 +151,7 @@ function LinkedInProfileSection({ data, linkedinUrl }) {
   )
 }
 
-function CandidateProfile({ candidate, job, onBack }) {
+function CandidateProfile({ candidate, job, onBack, onShareToggle }) {
   const s = candidate.scores ?? {}
   const transcript = candidate.interview_transcript ?? []
   const rec = s.recommendation
@@ -537,6 +537,27 @@ function CandidateProfile({ candidate, job, onBack }) {
         </>
       )}
 
+      {/* ── Share with Client ── */}
+      {!candidate._fromPool && candidate.match_pass !== null && onShareToggle && (
+        <div style={{ marginTop: 24, padding: '14px 16px', background: 'var(--surface)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+          <div>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-3)', marginBottom: 4 }}>Client Visibility</div>
+            <div style={{ fontSize: 13, color: 'var(--text-2)' }}>
+              {candidate.shared_with_client
+                ? 'This candidate is visible in the client portal.'
+                : 'This candidate is not yet visible to the client.'}
+            </div>
+          </div>
+          <button
+            className="btn btn-secondary"
+            style={{ whiteSpace: 'nowrap', flexShrink: 0, ...(candidate.shared_with_client ? { color: 'var(--green)', borderColor: 'rgba(42,110,58,0.5)', background: 'var(--green-d)' } : { color: 'var(--accent)', borderColor: 'rgba(205,127,69,0.5)' }) }}
+            onClick={() => onShareToggle(candidate)}
+          >
+            {candidate.shared_with_client ? '✓ Shared with Client' : 'Share with Client →'}
+          </button>
+        </div>
+      )}
+
       {/* ── Recruiter Notes ── */}
       <div style={{ marginTop: 24, padding: '14px 16px', background: 'var(--surface)', border: '1px solid var(--border)' }}>
         <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-3)', marginBottom: 8 }}>Recruiter Notes</div>
@@ -759,6 +780,12 @@ export default function RecruiterCandidates() {
     }).catch(() => {})
     // Poll the sourcing log every 10 s to detect completion
     startPoll(job.id, startedAt)
+  }
+
+  async function toggleShareWithClient(candidate) {
+    const newVal = !candidate.shared_with_client
+    await supabase.from('candidates').update({ shared_with_client: newVal }).eq('id', candidate.id)
+    setCandidates(p => p.map(c => c.id === candidate.id ? { ...c, shared_with_client: newVal } : c))
   }
 
   async function handleDelete() {
@@ -1004,7 +1031,7 @@ export default function RecruiterCandidates() {
   if (selected) {
     return (
       <div className="page">
-        <CandidateProfile candidate={selected} job={selectedJob} onBack={() => setSelectedId(null)} />
+        <CandidateProfile candidate={selected} job={selectedJob} onBack={() => setSelectedId(null)} onShareToggle={toggleShareWithClient} />
       </div>
     )
   }
@@ -1344,6 +1371,16 @@ export default function RecruiterCandidates() {
                     {status === 'Interview Pending' && <span className="badge badge-amber">Interview Pending</span>}
                     {status === 'Pending'           && <span className="badge" style={{ color: 'var(--text-3)', background: 'var(--surface2)' }}>Pending</span>}
                     {c._fromPool && <span className="badge badge-green" style={{ fontSize: 9 }}>Pool</span>}
+                    {!c._fromPool && c.match_pass !== null && (
+                      <button
+                        className="btn btn-secondary"
+                        style={{ fontSize: 10, padding: '2px 8px', whiteSpace: 'nowrap', ...(c.shared_with_client ? { color: 'var(--green)', borderColor: 'rgba(42,110,58,0.5)', background: 'var(--green-d)' } : {}) }}
+                        onClick={e => { e.stopPropagation(); toggleShareWithClient(c) }}
+                        title={c.shared_with_client ? 'Remove from client portal' : 'Share with client'}
+                      >
+                        {c.shared_with_client ? '✓ Shared' : 'Share'}
+                      </button>
+                    )}
                     {!c._fromPool && (
                       <button
                         className="btn btn-secondary"
