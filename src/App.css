@@ -613,10 +613,10 @@ select option { background: var(--surface2); color: var(--text); }
 
 /* Conversation sidebar */
 .hchat-sidebar {
-  width: 252px; flex-shrink: 0;
+  width: 236px; flex-shrink: 0;
   display: flex; flex-direction: column;
   border-right: 1px solid var(--border);
-  background: var(--surface);
+  background: var(--surface-2);
   overflow: hidden;
 }
 .hchat-sidebar-top {
@@ -668,7 +668,10 @@ select option { background: var(--surface2); color: var(--text); }
   background: rgba(0,0,0,0.55); backdrop-filter: blur(2px);
 }
 
-/* Sidebar hamburger toggle */
+/* Sidebar hamburger — mobile only */
+.hchat-menu-btn-mobile { display: none; }
+@media (max-width: 640px) { .hchat-menu-btn-mobile { display: flex; } }
+
 .hchat-menu-btn {
   background: none; border: none; cursor: pointer; flex-shrink: 0;
   color: var(--text-3); padding: 6px; border-radius: var(--r);

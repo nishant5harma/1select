@@ -184,9 +184,9 @@ export default function ClientChat() {
 
         {/* Header */}
         <div className="hchat-page-head">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
             <button
-              className="hchat-menu-btn"
+              className="hchat-menu-btn hchat-menu-btn-mobile"
               onClick={() => setSidebarOpen(o => !o)}
               title="Conversations"
             >
@@ -194,11 +194,10 @@ export default function ClientChat() {
                 <path d="M2 4h12M2 8h12M2 12h8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
               </svg>
             </button>
-            <div style={{ minWidth: 0 }}>
-              <h2>AI Hiring Assistant</h2>
-              <p style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {activeConv ? activeConv.title : 'Ask about your pipeline, candidates, or get expert hiring advice'}
-              </p>
+            <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'var(--accent)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 500, flexShrink: 0 }}>OS</div>
+            <div>
+              <strong style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--text)', fontFamily: 'var(--font-body)' }}>One Select Assistant</strong>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-3)' }}>Pipeline copilot · always on</span>
             </div>
           </div>
           <button
@@ -206,7 +205,7 @@ export default function ClientChat() {
             style={{ flexShrink: 0, fontSize: 11, padding: '6px 12px' }}
             onClick={handleNew}
           >
-            + New
+            + New chat
           </button>
         </div>
 
@@ -229,12 +228,11 @@ export default function ClientChat() {
                 I have live access to your pipeline, candidate scores, and interview data.
                 Ask me anything.
               </p>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, width: '100%', maxWidth: 480 }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center', maxWidth: 520 }}>
                 {SUGGESTIONS.map(s => (
                   <button
                     key={s}
-                    className="hchat-suggestion"
-                    style={{ fontSize: 13, padding: '10px 14px' }}
+                    className="sug"
                     onClick={() => { setInput(s); inputRef.current?.focus() }}
                   >
                     {s}

@@ -3,17 +3,17 @@
 /* ─── Variables ─────────────────────────────────────────── */
 :root {
   /* Page chrome & sidebar */
-  --bg:            #111425;
-  --navy:          #111425;
-  --navy-surface:  #161A30;
-  --navy-border:   #222640;
+  --bg:            #0D0F1A;
+  --navy:          #0D0F1A;
+  --navy-surface:  #161A2A;
+  --navy-border:   #212741;
   --navy-text:     #9AA8C8;
   --navy-text-2:   #6878A0;
 
   /* Content surfaces (cream/parchment) */
   --surface:   #E8E2D6;
   --surface-2: #DFD8CB;
-  --surface-3: #D6CEBI;
+  --surface-3: #D6CEBF;
   --border:    #C8C0B0;
   --border-2:  #B8B0A0;
 
