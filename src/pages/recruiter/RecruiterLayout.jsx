@@ -47,20 +47,15 @@ export default function RecruiterLayout() {
           ))}
         </nav>
 
-        <div className="sidebar-footer" style={{ flexShrink: 0, borderTop: '1px solid var(--border)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-            <div className="sidebar-user-email" style={{ margin: 0, color: 'var(--navy-text)' }}>{user?.email}</div>
+        <div className="sidebar-footer">
+          <div className="sf-user">
+            <div className="sf-avatar">{(user?.email ?? '?')[0].toUpperCase()}</div>
+            <div className="sf-meta">
+              <div className="sf-email">{user?.email}</div>
+            </div>
             <NotificationBell />
           </div>
-          <button
-            className="btn btn-secondary"
-            style={{ width: '100%', justifyContent: 'center', color: '#6878A0' }}
-            onMouseEnter={e => e.currentTarget.style.color = 'var(--accent)'}
-            onMouseLeave={e => e.currentTarget.style.color = '#6878A0'}
-            onClick={handleSignOut}
-          >
-            Sign out
-          </button>
+          <button className="sf-signout" onClick={handleSignOut}>Sign out</button>
         </div>
       </aside>
 
