@@ -5,6 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:frontend": "vite",
+    "dev:functions": "supabase functions serve --env-file supabase/.env",
+    "db:push": "supabase db push",
+    "db:reset": "supabase db reset",
+    "db:start": "supabase start",
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview"
