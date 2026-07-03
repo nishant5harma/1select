@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 import { corsHeaders } from "../_shared/cors.ts"
+import { CLAUDE_MODEL } from "../_shared/claude.ts"
 
 const RATE_LIMIT    = 30     // max requests
 const WINDOW_MS     = 60_000 // per 60 seconds
@@ -25,8 +26,9 @@ async function checkRateLimit(adminClient: ReturnType<typeof createClient>, user
   })
 
   if (error) {
-    console.error('[call-claude] rate_limit rpc error (blocking request):', error.message)
-    return false
+    // Fail-open when rate_limits migration isn't applied yet — otherwise all AI calls block.
+    console.error('[call-claude] rate_limit rpc error (allowing request):', error.message)
+    return true
   }
   return data === true
 }
@@ -82,7 +84,7 @@ serve(async (req) => {
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
+        model: CLAUDE_MODEL,
         max_tokens: Math.min(maxTokens, 4096),
         ...(systemPrompt ? { system: systemPrompt } : {}),
         messages,
@@ -91,7 +93,12 @@ serve(async (req) => {
 
     if (!claudeRes.ok) {
       const err = await claudeRes.json().catch(() => ({}))
-      throw new Error((err as { error?: { message?: string } }).error?.message ?? `Claude API error ${claudeRes.status}`)
+      const msg = (err as { error?: { message?: string } }).error?.message ?? `Claude API error ${claudeRes.status}`
+      console.error('[call-claude] anthropic error:', msg)
+      return new Response(JSON.stringify({ error: msg }), {
+        status: 502,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
     }
 
     const data = await claudeRes.json()
@@ -103,9 +110,10 @@ serve(async (req) => {
     })
 
   } catch (err) {
-    console.error('call-claude error:', err)
+    const msg = err instanceof Error ? err.message : 'AI service error. Please try again.'
+    console.error('call-claude error:', msg)
     return new Response(
-      JSON.stringify({ error: 'AI service error. Please try again.' }),
+      JSON.stringify({ error: msg }),
       { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }

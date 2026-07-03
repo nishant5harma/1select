@@ -28,6 +28,18 @@ export async function callClaude(messages, systemPrompt, maxTokens = 1000) {
 // when sending an AI interview invite so questions are pre-saved to the job
 // record — the public interview page has no auth session and cannot call
 // callClaude() directly (call-claude requires a valid user JWT).
+export function defaultInterviewQuestions(job) {
+  const title = job?.title ?? 'this role'
+  const skills = (job?.required_skills ?? []).slice(0, 3).join(', ') || 'the required skills'
+  return [
+    { q: `Tell us about your background and why you're interested in the ${title} role.`, type: 'behavioral', seconds: 90 },
+    { q: `Describe a project where you used ${skills}. What was your specific contribution?`, type: 'technical', seconds: 120 },
+    { q: `What is the most complex technical problem you've solved in a role similar to ${title}?`, type: 'technical', seconds: 120 },
+    { q: `How do you handle conflicting priorities or tight deadlines? Give a concrete example.`, type: 'behavioral', seconds: 90 },
+    { q: `Where do you see the biggest gap between your experience and this role, and how would you close it?`, type: 'technical', seconds: 120 },
+  ]
+}
+
 export async function generateInterviewQuestions(job) {
   const sys = `Generate exactly 5 video interview questions for a ${job.title} role.
 Required skills: ${(job.required_skills || []).join(', ')}
@@ -38,9 +50,13 @@ Return ONLY a valid JSON array (no markdown):
 
 Rules: 3 technical (120 seconds each), 2 behavioral (90 seconds each). Be specific and role-relevant.`
 
-  const reply = await callClaude([{ role: 'user', content: 'Generate.' }], sys, 700)
-  const clean = reply.trim().replace(/^```(?:json)?\s*/i, '').replace(/```[\s]*$/m, '').trim()
-  return JSON.parse(clean)
+  try {
+    const reply = await callClaude([{ role: 'user', content: 'Generate.' }], sys, 700)
+    const clean = reply.trim().replace(/^```(?:json)?\s*/i, '').replace(/```[\s]*$/m, '').trim()
+    return JSON.parse(clean)
+  } catch {
+    return defaultInterviewQuestions(job)
+  }
 }
 
 // NOTE: scores here are generated from CV data via a simulated interview — they

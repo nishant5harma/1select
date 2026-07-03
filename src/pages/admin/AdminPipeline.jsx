@@ -66,7 +66,9 @@ function ScoreRing({ score, size = 48 }) {
 
 const DEFAULT_JOB_FORM = { title:'', experience_years:3, required_skills:[], preferred_skills:[], description:'', tech_weight:60, comm_weight:40 }
 const EMPTY_MANUAL = { full_name:'', email:'', phone:'', candidate_role:'', total_years:'', skills:'', education:'', summary:'', linkedin_url:'', github_url:'', portfolio_url:'', addToPool:false }
-const appUrl = 'https://oneselectai.com'
+function interviewAppUrl() {
+  return (import.meta.env.VITE_APP_URL || (typeof window !== 'undefined' ? window.location.origin : '') || 'https://oneselectai.com').replace(/\/$/, '')
+}
 
 export default function AdminPipeline({ allowedClientIds } = {}) {
   const { profile, user } = useAuth()
@@ -350,17 +352,11 @@ Return the subject line first starting with "SUBJECT: ", then a blank line, then
     if (!email.trim()) return
     setAiInviteModal(m => ({ ...m, sending: true, error: null }))
 
-    // Pre-generate interview questions and save to the job record before sending
-    // the invite. The public /interview/:token page has no auth session, so
-    // callClaude() would return 401 if questions aren't pre-populated here.
+    // Pre-generate interview questions (falls back to defaults if call-claude fails).
     if (activeJob && !activeJob.interview_questions?.length) {
-      try {
-        const qs = await generateInterviewQuestions(activeJob)
-        await supabase.from('jobs').update({ interview_questions: qs }).eq('id', activeJob.id)
-        setActiveJob(j => ({ ...j, interview_questions: qs }))
-      } catch {
-        // Non-blocking — VideoInterview will show an error if questions are missing
-      }
+      const qs = await generateInterviewQuestions(activeJob)
+      await supabase.from('jobs').update({ interview_questions: qs }).eq('id', activeJob.id)
+      setActiveJob(j => ({ ...j, interview_questions: qs }))
     }
 
     let token = candidate.interview_invite_token
@@ -372,17 +368,32 @@ Return the subject line first starting with "SUBJECT: ", then a blank line, then
       setCandidates(p => p.map(c => c.id === candidate.id ? { ...c, interview_invite_token: token, interview_token_expires_at: expiresAt } : c))
     }
 
+    const link = `${interviewAppUrl()}/interview/${token}`
     const companyName = clients.find(c => c.id === clientId)?.company_name ?? ''
-    const { error } = await supabase.functions.invoke('send-ai-interview-invite', {
+    const { data: inviteData, error } = await supabase.functions.invoke('send-ai-interview-invite', {
       body: { email: email.trim(), name: candidate.full_name, job_title: activeJob?.title ?? '', company_name: companyName, token },
     })
-    if (error) {
-      setAiInviteModal(m => ({ ...m, sending: false, error: error.message }))
-    } else {
-      setAiInviteModal(m => ({ ...m, sending: false, sent: true }))
+
+    const emailErr = error?.message || inviteData?.error
+    const emailOk  = !error && inviteData?.success === true
+
+    if (emailOk) {
+      setAiInviteModal(m => ({ ...m, sending: false, sent: true, emailSkipped: false, interviewLink: link, error: null }))
       addLog(`✉ AI interview invite sent to ${email.trim()}`, 'ok')
-      logAudit(supabase, { actorId: user?.id, actorRole: profile?.user_role ?? 'recruiter', action: 'interview_invited', entityType: 'candidate', entityId: candidate.id, jobId: activeJob?.id, metadata: { candidate_name: candidate.full_name, email: email.trim(), job_title: activeJob?.title } })
+    } else {
+      setAiInviteModal(m => ({
+        ...m,
+        sending: false,
+        sent: true,
+        emailSkipped: true,
+        interviewLink: link,
+        error: emailErr
+          ? `Email not sent: ${emailErr}. Copy the interview link below and share it manually.`
+          : 'Email not sent (Resend not configured). Copy the interview link below and share it manually.',
+      }))
+      addLog(`✉ Interview link ready for ${candidate.full_name} — email not sent, copy link manually`, 'info')
     }
+    logAudit(supabase, { actorId: user?.id, actorRole: profile?.user_role ?? 'recruiter', action: 'interview_invited', entityType: 'candidate', entityId: candidate.id, jobId: activeJob?.id, metadata: { candidate_name: candidate.full_name, email: email.trim(), job_title: activeJob?.title, email_sent: emailOk } })
   }
 
   // ── Cal.com self-scheduling invite ────────────────────────────────────────
@@ -830,7 +841,7 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
               candidate_id: c.id, job_id: activeJob.id, questions, expires_at: expiresAt,
             }).select('token').single()
             if (tokenErr) throw new Error(tokenErr.message)
-            const assessmentUrl = `${appUrl}/assessment/${tokenRow.token}`
+            const assessmentUrl = `${interviewAppUrl()}/assessment/${tokenRow.token}`
             await supabase.functions.invoke('send-assessment-invite', {
               body: { email: c.email, name: c.full_name, jobTitle: activeJob.title, assessmentUrl },
             })
@@ -1516,6 +1527,29 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
                   {outreachLog[c.id] && !outreachLog[c.id].responded && (
                     <button className="btn btn-secondary" style={{ fontSize: 10, padding: '2px 8px' }} onClick={() => openOutreachModal(c)}>↻ Resend</button>
                   )}
+                  {!c.scores?.overallScore && !c.video_urls?.some(v => v?.url != null) && (
+                    <>
+                      <button
+                        className="btn btn-primary"
+                        style={{ fontSize: 10, padding: '2px 8px', whiteSpace: 'nowrap' }}
+                        onClick={e => { e.stopPropagation(); setAiInviteModal({ candidate: c, email: c.email ?? '', sending: false, sent: false, error: null }) }}
+                      >
+                        ✉ AI Interview
+                      </button>
+                      {c.interview_invite_token && (
+                        <button
+                          className="btn btn-secondary"
+                          style={{ fontSize: 10, padding: '2px 8px' }}
+                          onClick={e => { e.stopPropagation(); navigator.clipboard.writeText(`${interviewAppUrl()}/interview/${c.interview_invite_token}`) }}
+                        >
+                          ⎘ Copy Link
+                        </button>
+                      )}
+                    </>
+                  )}
+                  {(c.scores?.overallScore != null || c.video_urls?.some(v => v?.url != null)) && (
+                    <span className="badge badge-green" style={{ fontSize: 10 }}>Interviewed</span>
+                  )}
                   {!isClient && <button className="btn btn-ghost" title="Remove candidate" style={{ padding: '2px 6px', fontSize: 14, color: 'var(--red)', opacity: 0.5 }} onClick={e => { e.stopPropagation(); setDeleteModal({ candidate: c }) }}>🗑</button>}
                 </div>
               </div>
@@ -1658,7 +1692,7 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
                           <button className="btn btn-secondary" style={{ fontSize: 10, padding: '2px 8px' }} onClick={e => { e.stopPropagation(); setAiInviteModal({ candidate: c, email: c.email ?? '', sending: false, sent: false, error: null }) }}>✉ Invite</button>
                         )}
                         {c.interview_invite_token && (
-                          <button className="btn btn-secondary" style={{ fontSize: 10, padding: '2px 8px' }} onClick={() => navigator.clipboard.writeText(`${appUrl}/interview/${c.interview_invite_token}`)}>⎘ Copy Link</button>
+                          <button className="btn btn-secondary" style={{ fontSize: 10, padding: '2px 8px' }} onClick={() => navigator.clipboard.writeText(`${interviewAppUrl()}/interview/${c.interview_invite_token}`)}>⎘ Copy Link</button>
                         )}
                       </>
                     )}
@@ -1852,8 +1886,14 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
           <div style={MB}>
             <div><div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>Send AI Interview Invite</div><div style={{ fontSize: 13, color: 'var(--text-3)' }}>{aiInviteModal.candidate.full_name}</div></div>
             <div><label style={ML}>Email</label><input autoFocus style={MI} value={aiInviteModal.email} onChange={e => setAiInviteModal(m => ({ ...m, email: e.target.value, sent: false, error: null }))} onKeyDown={e => { if (e.key === 'Enter' && !aiInviteModal.sending && !aiInviteModal.sent) sendAiInterviewInvite() }} placeholder="candidate@email.com" disabled={aiInviteModal.sending || aiInviteModal.sent} /></div>
-            {aiInviteModal.error && <div style={{ fontSize: 12, color: 'var(--red)' }}>⚠ {aiInviteModal.error}</div>}
-            {aiInviteModal.sent && <div style={{ fontSize: 12, color: 'var(--green)' }}>✓ Invite sent to {aiInviteModal.email}</div>}
+            {aiInviteModal.error && <div style={{ fontSize: 12, color: aiInviteModal.emailSkipped ? 'var(--amber, #b45309)' : 'var(--red)' }}>⚠ {aiInviteModal.error}</div>}
+            {aiInviteModal.sent && !aiInviteModal.emailSkipped && <div style={{ fontSize: 12, color: 'var(--green)' }}>✓ Invite sent to {aiInviteModal.email}</div>}
+            {aiInviteModal.sent && aiInviteModal.interviewLink && (
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <input readOnly style={{ ...MI, flex: 1, fontSize: 11 }} value={aiInviteModal.interviewLink} onFocus={e => e.target.select()} />
+                <button type="button" className="btn btn-secondary" style={{ fontSize: 11, whiteSpace: 'nowrap' }} onClick={() => navigator.clipboard.writeText(aiInviteModal.interviewLink)}>⎘ Copy</button>
+              </div>
+            )}
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
               <button className="btn btn-secondary" onClick={() => setAiInviteModal(null)}>{aiInviteModal.sent ? 'Close' : 'Cancel'}</button>
               {!aiInviteModal.sent && <button className="btn btn-primary" disabled={aiInviteModal.sending || !aiInviteModal.email.trim()} onClick={sendAiInterviewInvite}>{aiInviteModal.sending ? <><span className="spinner" style={{ width: 11, height: 11 }} /> Sending…</> : 'Send Invite'}</button>}

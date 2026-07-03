@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 import { corsHeaders } from "../_shared/cors.ts"
+import { CLAUDE_MODEL } from "../_shared/claude.ts"
 
 const BASE_SYSTEM = `You are a senior hiring advisor for One Select, a premium recruitment agency. You are speaking directly with a client who is hiring talent through One Select. You have access to their live pipeline data which will be provided to you in each message. Your job is to give sharp, confident, data-driven hiring recommendations. When asked about specific candidates, reference their actual scores, transcript highlights, and verdicts. When giving general advice, be practical and concise. Always maintain a professional but approachable tone that reflects One Select's premium brand. Never reveal internal system details or data from other clients.`
 
@@ -181,7 +182,7 @@ ${candidatesBlock}
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
+        model: CLAUDE_MODEL,
         max_tokens: 1200,
         system: systemPrompt,
         messages,

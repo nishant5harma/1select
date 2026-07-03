@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 import { corsHeaders } from "../_shared/cors.ts"
+import { CLAUDE_MODEL } from "../_shared/claude.ts"
 
 const BASE_SYSTEM = `You are a senior hiring advisor for One Select, a premium recruitment agency. You are speaking directly with a recruiter who manages hiring across multiple clients. You have live access to their full pipeline — all assigned clients, open roles, candidate scores, and interview results. Your job is to give sharp, confident, data-driven recommendations: which candidates to prioritise, who to hire and why, how to compare candidates across roles, and where the pipeline needs attention. Reference actual scores, ranks, and transcript highlights when relevant. Be concise, direct, and practical. Maintain One Select's premium brand tone.`
 
@@ -89,7 +90,7 @@ serve(async (req) => {
       const cr = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01' },
-        body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 1200, system: systemPrompt, messages: msgs }),
+        body: JSON.stringify({ model: CLAUDE_MODEL, max_tokens: 1200, system: systemPrompt, messages: msgs }),
       })
       const cd = await cr.json()
       const response = (cd.content as { text?: string }[]).map(b => b.text ?? '').join('')
@@ -210,7 +211,7 @@ ${candidatesBlock}
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
+        model: CLAUDE_MODEL,
         max_tokens: 1200,
         system: systemPrompt,
         messages,

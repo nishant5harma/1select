@@ -35,8 +35,20 @@ serve(async (req) => {
 
   try {
     const { email, name, job_title, company_name, token } = await req.json()
-    const resendKey         = Deno.env.get('RESEND_API_KEY') ?? ''
-    const appUrl            = 'https://oneselectai.com'
+    if (!email?.trim() || !token) {
+      return new Response(JSON.stringify({ error: 'email and token are required' }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    const resendKey = Deno.env.get('RESEND_API_KEY') ?? ''
+    if (!resendKey) {
+      return new Response(JSON.stringify({ error: 'Email service is not configured (RESEND_API_KEY missing)' }), {
+        status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    const appUrl = (Deno.env.get('APP_URL') ?? Deno.env.get('ALLOWED_ORIGIN') ?? 'https://oneselectai.com').replace(/\/$/, '')
     const questionnaireLink = `${appUrl}/questionnaire/${token}`
     const interviewLink     = `${appUrl}/interview/${token}`
 
@@ -84,7 +96,13 @@ serve(async (req) => {
       `,
     }, 'send-ai-interview-invite', email)
 
-    return new Response(JSON.stringify({ success: emailSent }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    if (!emailSent) {
+      return new Response(JSON.stringify({ error: 'Failed to send interview email. Check RESEND_API_KEY and sender domain.' }), {
+        status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
   } catch (err) {
     console.error('send-ai-interview-invite error:', err)
     return new Response(JSON.stringify({ error: (err as Error).message }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
