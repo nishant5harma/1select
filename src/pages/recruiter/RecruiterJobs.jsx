@@ -243,14 +243,14 @@ export default function RecruiterJobs() {
             <button
               key={s}
               className={`btn ${filter === s ? 'btn-primary' : 'btn-secondary'}`}
-              style={{ padding: '6px 12px', fontSize: 12, textTransform: 'capitalize' }}
+              style={{ padding: '6px 12px', fontSize: 12, textTransform: 'capitalize', ...(filter !== s ? { color: 'var(--navy-text)', borderColor: 'var(--navy-border)' } : {}) }}
               onClick={() => setFilter(s)}
             >{s}</button>
           ))}
-          <button className="btn btn-secondary" style={{ marginLeft: 4 }} onClick={() => { setShowForm(p => !p); setError('') }}>
+          <button className="btn btn-secondary" style={{ marginLeft: 4, color: 'var(--navy-text)', borderColor: 'var(--navy-border)' }} onClick={() => { setShowForm(p => !p); setError('') }}>
             {showForm ? 'Cancel' : '+ Quick Add'}
           </button>
-          <button className="btn btn-secondary" onClick={() => { setShowInstant(true); setShowForm(false) }}>
+          <button className="btn btn-secondary" style={{ color: 'var(--navy-text)', borderColor: 'var(--navy-border)' }} onClick={() => { setShowInstant(true); setShowForm(false) }}>
             ✨ Post a Job
           </button>
           <button className="btn btn-primary" onClick={() => { setShowWizard(true); setShowForm(false) }}>

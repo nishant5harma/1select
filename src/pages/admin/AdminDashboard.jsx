@@ -3,6 +3,38 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../lib/AuthContext'
 
+const STAT_CARDS = [
+  { key: 'clients',     label: 'Total Clients',          path: '/admin/clients',     tone: 'accent' },
+  { key: 'jobs',        label: 'Active Jobs',            path: '/admin/jobs',        tone: 'blue'   },
+  { key: 'candidates',  label: 'Candidates Processed',   path: '/admin/pipeline',    tone: 'amber'  },
+  { key: 'interviews',  label: 'Interviews Done',        path: '/admin/analytics',   tone: 'green'  },
+  { key: 'poolTotal',   label: 'Talent Pool',            path: '/admin/talent-pool', tone: 'neutral' },
+  { key: 'poolAvailable', label: 'Available in Pool',    path: '/admin/talent-pool', tone: 'green'  },
+  { key: 'mrr',         label: 'Monthly Revenue',        path: '/admin/billing',     tone: 'green', format: 'currency' },
+  { key: 'placements',  label: 'Placements This Month',  path: '/admin/pipeline',    tone: 'accent' },
+]
+
+const QUICK_LINKS = [
+  { label: 'Manage Clients',   path: '/admin/clients',    icon: '◉' },
+  { label: 'All Jobs',         path: '/admin/jobs',       icon: '◫' },
+  { label: 'Pipeline Board',   path: '/admin/board',      icon: '▦' },
+  { label: 'Talent Pool',      path: '/admin/talent-pool', icon: '◌' },
+  { label: 'Analytics',        path: '/admin/analytics',  icon: '◱' },
+  { label: 'Billing',          path: '/admin/billing',    icon: '◇' },
+]
+
+function formatStatValue(key, value, format) {
+  if (format === 'currency') return `₹${Number(value).toLocaleString('en-IN')}`
+  return value
+}
+
+function greeting() {
+  const h = new Date().getHours()
+  if (h < 12) return 'Good morning'
+  if (h < 17) return 'Good afternoon'
+  return 'Good evening'
+}
+
 export default function AdminDashboard() {
   const { user, profile, profileLoading } = useAuth()
   const navigate = useNavigate()
@@ -12,7 +44,6 @@ export default function AdminDashboard() {
   const [sendingUpdates, setSendingUpdates] = useState(false)
   const [updateResult, setUpdateResult] = useState(null)
 
-  // First-login password change
   const [showPasswordChange, setShowPasswordChange] = useState(false)
   const [newPassword,     setNewPassword]     = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -38,7 +69,7 @@ export default function AdminDashboard() {
 
   async function load() {
     try {
-      const ms = (() => { const d = new Date(); d.setDate(1); d.setHours(0,0,0,0); return d.toISOString() })()
+      const ms = (() => { const d = new Date(); d.setDate(1); d.setHours(0, 0, 0, 0); return d.toISOString() })()
       const [
         { count: clients },
         { count: jobs },
@@ -104,16 +135,13 @@ export default function AdminDashboard() {
     setSendingUpdates(false)
   }
 
-  // First-login password change screen — no dismissal allowed
   if (showPasswordChange) {
     return (
       <div className="modal-overlay" style={{ zIndex: 1000 }}>
         <div className="modal" style={{ maxWidth: 420 }}>
           <div className="modal-head">
             <div>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.2em', color: 'var(--accent)', marginBottom: 4 }}>
-                One Select
-              </div>
+              <div className="adm-eyebrow">One Select</div>
               <h3 style={{ margin: 0 }}>Welcome to One Select</h3>
             </div>
           </div>
@@ -125,24 +153,11 @@ export default function AdminDashboard() {
             <form onSubmit={handlePasswordChange}>
               <div className="field" style={{ marginBottom: 14 }}>
                 <label>New Password</label>
-                <input
-                  type="password"
-                  placeholder="At least 8 characters"
-                  value={newPassword}
-                  onChange={e => setNewPassword(e.target.value)}
-                  autoFocus
-                  autoComplete="new-password"
-                />
+                <input type="password" placeholder="At least 8 characters" value={newPassword} onChange={e => setNewPassword(e.target.value)} autoFocus autoComplete="new-password" />
               </div>
               <div className="field" style={{ marginBottom: 24 }}>
                 <label>Confirm Password</label>
-                <input
-                  type="password"
-                  placeholder="Repeat your new password"
-                  value={confirmPassword}
-                  onChange={e => setConfirmPassword(e.target.value)}
-                  autoComplete="new-password"
-                />
+                <input type="password" placeholder="Repeat your new password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} autoComplete="new-password" />
               </div>
               <button type="submit" className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }} disabled={passwordSaving}>
                 {passwordSaving ? <><span className="spinner" style={{ width: 13, height: 13 }} /> Saving…</> : 'Set Password & Continue'}
@@ -154,92 +169,105 @@ export default function AdminDashboard() {
     )
   }
 
-  if (loading) return <div className="page"><span className="spinner" /></div>
+  if (loading) {
+    return (
+      <div className="page admin-dash">
+        <div className="adm-loading"><span className="spinner" /></div>
+      </div>
+    )
+  }
+
+  const today = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+  const name = profile?.full_name?.split(' ')[0] || 'Admin'
 
   return (
-    <div className="page">
-      <div className="page-head">
-        <div>
-          <h2>Dashboard</h2>
-          <p>Platform-wide overview</p>
+    <div className="page admin-dash">
+      <header className="adm-header">
+        <div className="adm-header-text">
+          <p className="adm-eyebrow">{today}</p>
+          <h1 className="adm-title">{greeting()}, {name}</h1>
+          <p className="adm-subtitle">Platform-wide overview across clients, jobs, and hiring activity.</p>
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
-          <button className="btn btn-secondary" disabled={sendingUpdates} onClick={sendWeeklyUpdates} style={{ background: 'var(--accent)', color: '#fff', border: 'none' }}>
-            {sendingUpdates ? <><span className="spinner" style={{ width: 11, height: 11 }} /> Sending…</> : '✉ Send Weekly Updates'}
+        <div className="adm-header-actions">
+          <button type="button" className="adm-btn-primary" disabled={sendingUpdates} onClick={sendWeeklyUpdates}>
+            {sendingUpdates ? <><span className="spinner" style={{ width: 12, height: 12 }} /> Sending…</> : 'Send Weekly Updates'}
           </button>
           {updateResult && (
-            <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: updateResult.ok ? 'var(--green)' : 'var(--red)' }}>
-              {updateResult.msg}
-            </span>
+            <p className={`adm-toast ${updateResult.ok ? 'adm-toast--ok' : 'adm-toast--err'}`}>{updateResult.msg}</p>
           )}
         </div>
-      </div>
+      </header>
 
-      <div className="metrics-row">
-        <div className="metric-card blue" style={{ cursor: 'pointer' }} onClick={() => navigate('/admin/clients')}>
-          <span className="metric-val">{stats.clients}</span>
-          <span className="metric-label">Total Clients</span>
-        </div>
-        <div className="metric-card" style={{ cursor: 'pointer' }} onClick={() => navigate('/admin/jobs')}>
-          <span className="metric-val">{stats.jobs}</span>
-          <span className="metric-label">Active Jobs</span>
-        </div>
-        <div className="metric-card amber" style={{ cursor: 'pointer' }} onClick={() => navigate('/admin/pipeline')}>
-          <span className="metric-val">{stats.candidates}</span>
-          <span className="metric-label">Candidates Processed</span>
-        </div>
-        <div className="metric-card green" style={{ cursor: 'pointer' }} onClick={() => navigate('/admin/analytics')}>
-          <span className="metric-val">{stats.interviews}</span>
-          <span className="metric-label">Interviews Done</span>
-        </div>
-      </div>
+      <section className="adm-stat-grid" aria-label="Key metrics">
+        {STAT_CARDS.map(({ key, label, path, tone, format }) => (
+          <button
+            key={key}
+            type="button"
+            className={`adm-stat-card adm-stat-card--${tone}`}
+            onClick={() => navigate(path)}
+          >
+            <span className="adm-stat-val">{formatStatValue(key, stats[key], format)}</span>
+            <span className="adm-stat-label">{label}</span>
+          </button>
+        ))}
+      </section>
 
-      <div className="metrics-row" style={{ marginBottom: 20 }}>
-        <div className="metric-card" style={{ cursor: 'pointer' }} onClick={() => navigate('/admin/talent-pool')}>
-          <span className="metric-val">{stats.poolTotal}</span>
-          <span className="metric-label">Pool · Total</span>
-        </div>
-        <div className="metric-card green" style={{ cursor: 'pointer' }} onClick={() => navigate('/admin/talent-pool')}>
-          <span className="metric-val">{stats.poolAvailable}</span>
-          <span className="metric-label">Pool · Available</span>
-        </div>
-        <div className="metric-card green" style={{ cursor: 'pointer' }} onClick={() => navigate('/admin/billing')}>
-          <span className="metric-val">₹{stats.mrr.toLocaleString()}</span>
-          <span className="metric-label">MRR</span>
-        </div>
-        <div className="metric-card amber" style={{ cursor: 'pointer' }} onClick={() => navigate('/admin/pipeline')}>
-          <span className="metric-val">{stats.placements}</span>
-          <span className="metric-label">Placements This Month</span>
-        </div>
-      </div>
-
-      <div className="section-card">
-        <div className="section-card-head"><h3>Recent Jobs</h3></div>
-        {recentJobs.length === 0
-          ? (
-            <div className="empty-state">
-              <div style={{ fontSize: 28, marginBottom: 10, opacity: 0.3 }}>◫</div>
-              <div style={{ fontWeight: 400, color: 'var(--text-2)', marginBottom: 6 }}>No jobs yet</div>
-              <div style={{ fontSize: 12, color: 'var(--text-3)' }}>Newly created jobs across the platform will appear here.</div>
+      <div className="adm-body-grid">
+        <section className="adm-panel">
+          <div className="adm-panel-head">
+            <h2>Recent Jobs</h2>
+            <button type="button" className="adm-link-btn" onClick={() => navigate('/admin/jobs')}>View all →</button>
+          </div>
+          {recentJobs.length === 0 ? (
+            <div className="adm-empty">
+              <span className="adm-empty-icon">◫</span>
+              <p className="adm-empty-title">No jobs yet</p>
+              <p className="adm-empty-sub">Newly created jobs across the platform will appear here.</p>
             </div>
-          )
-          : recentJobs.map((j) => (
-            <div key={j.id} className="table-row">
-              <div className="col-main">
-                <div className="col-name">{j.title}</div>
-                <div className="col-sub">{j.profiles?.company_name ?? '—'}</div>
-              </div>
-              <div className="col-right">
-                <span className={`badge ${j.status === 'active' ? 'badge-green' : 'badge-amber'}`}>
-                  {j.status ?? 'active'}
-                </span>
-                <span className="mono text-muted" style={{ fontSize: 11 }}>
-                  {new Date(j.created_at).toLocaleDateString()}
-                </span>
-              </div>
-            </div>
-          ))
-        }
+          ) : (
+            <ul className="adm-job-list">
+              {recentJobs.map(j => (
+                <li key={j.id}>
+                  <button type="button" className="adm-job-row" onClick={() => navigate('/admin/jobs')}>
+                    <span className="adm-job-avatar">{(j.title ?? 'J')[0].toUpperCase()}</span>
+                    <span className="adm-job-info">
+                      <span className="adm-job-title">{j.title}</span>
+                      <span className="adm-job-company">{j.profiles?.company_name ?? '—'}</span>
+                    </span>
+                    <span className="adm-job-meta">
+                      <span className={`adm-pill adm-pill--${j.status === 'active' ? 'green' : 'amber'}`}>
+                        {j.status ?? 'active'}
+                      </span>
+                      <span className="adm-job-date">
+                        {new Date(j.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      </span>
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        <aside className="adm-panel adm-panel--sidebar">
+          <div className="adm-panel-head">
+            <h2>Quick Actions</h2>
+          </div>
+          <nav className="adm-quick-links">
+            {QUICK_LINKS.map(link => (
+              <button key={link.path} type="button" className="adm-quick-link" onClick={() => navigate(link.path)}>
+                <span className="adm-quick-icon">{link.icon}</span>
+                <span>{link.label}</span>
+                <span className="adm-quick-arrow">→</span>
+              </button>
+            ))}
+          </nav>
+          <div className="adm-tip">
+            <p className="adm-tip-label">Tip</p>
+            <p className="adm-tip-text">Use the Pipeline Board to drag candidates between stages and track hiring progress in real time.</p>
+            <button type="button" className="adm-link-btn" onClick={() => navigate('/admin/board')}>Open Pipeline Board →</button>
+          </div>
+        </aside>
       </div>
     </div>
   )
