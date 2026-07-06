@@ -15,11 +15,47 @@ export default function PublicVideoInterview() {
 
   useEffect(() => { load() }, [token])
 
-  async function load() {
-    setLoading(true)
-    setError('')
+  function applySession(json) {
+    const vUrls = json.video_urls ?? []
+    const allDone = vUrls.length > 0 && vUrls.every(v => v?.url != null)
+    if (allDone) { setDone(true); return true }
 
-    // Try candidates table first
+    if (json.interview_token_expires_at && new Date(json.interview_token_expires_at) < new Date()) {
+      setError(`expired:${new Date(json.interview_token_expires_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}`)
+      return true
+    }
+
+    const payload = { candidate: json.candidate, job: json.job, table: json.table }
+    if (vUrls.length > 0) {
+      payload.partialCount = vUrls.filter(v => v?.url != null).length
+      payload.totalCount = vUrls.length
+    }
+    setData(payload)
+    return true
+  }
+
+  async function loadFromEdge() {
+    const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/get-interview-session`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+      },
+      body: JSON.stringify({ token }),
+    })
+    const json = await res.json().catch(() => ({}))
+    if (res.status === 404) {
+      if (json?.error) { setError(json.error); return true }
+      return false // edge function not deployed — fall back to direct query
+    }
+    if (!res.ok) {
+      setError(json.error ?? 'Invalid or expired interview link.')
+      return true
+    }
+    return applySession(json)
+  }
+
+  async function loadFromDirect() {
     const { data: cRow } = await supabase
       .from('candidates')
       .select('*, jobs(*)')
@@ -27,24 +63,15 @@ export default function PublicVideoInterview() {
       .maybeSingle()
 
     if (cRow) {
-      const vUrls = cRow.video_urls ?? []
-      const allDone = vUrls.length > 0 && vUrls.every(v => v?.url != null)
-      if (allDone) { setDone(true); setLoading(false); return }
-      if (vUrls.length > 0) {
-        // Partial upload — some answers failed; token still valid, show warning
-        setData({ candidate: cRow, job: cRow.jobs, table: 'candidates', partialCount: vUrls.filter(v => v?.url != null).length, totalCount: vUrls.length })
-        setLoading(false); return
-      }
-      if (cRow.interview_token_expires_at && new Date(cRow.interview_token_expires_at) < new Date()) {
-        setError(`expired:${new Date(cRow.interview_token_expires_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}`)
-        setLoading(false); return
-      }
-      setData({ candidate: cRow, job: cRow.jobs, table: 'candidates' })
-      setLoading(false)
-      return
+      return applySession({
+        candidate: cRow,
+        job: cRow.jobs,
+        table: 'candidates',
+        video_urls: cRow.video_urls ?? [],
+        interview_token_expires_at: cRow.interview_token_expires_at,
+      })
     }
 
-    // Try job_matches (talent pool)
     const { data: mRow } = await supabase
       .from('job_matches')
       .select('*, talent_pool(*), jobs(*)')
@@ -52,35 +79,38 @@ export default function PublicVideoInterview() {
       .maybeSingle()
 
     if (mRow) {
-      const vUrls = mRow.video_urls ?? []
-      const allDone = vUrls.length > 0 && vUrls.every(v => v?.url != null)
-      if (allDone) { setDone(true); setLoading(false); return }
-      if (vUrls.length > 0) {
-        const candidate = {
+      return applySession({
+        candidate: {
           id: mRow.id,
           full_name: mRow.talent_pool?.full_name ?? '',
           candidate_role: mRow.talent_pool?.candidate_role ?? '',
           email: mRow.talent_pool?.email ?? '',
-        }
-        setData({ candidate, job: mRow.jobs, table: 'job_matches', partialCount: vUrls.filter(v => v?.url != null).length, totalCount: vUrls.length })
-        setLoading(false); return
-      }
-      if (mRow.interview_token_expires_at && new Date(mRow.interview_token_expires_at) < new Date()) {
-        setError(`expired:${new Date(mRow.interview_token_expires_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}`)
-        setLoading(false); return
-      }
-      const candidate = {
-        id: mRow.id,
-        full_name: mRow.talent_pool?.full_name ?? '',
-        candidate_role: mRow.talent_pool?.candidate_role ?? '',
-        email: mRow.talent_pool?.email ?? '',
-      }
-      setData({ candidate, job: mRow.jobs, table: 'job_matches' })
-      setLoading(false)
-      return
+        },
+        job: mRow.jobs,
+        table: 'job_matches',
+        video_urls: mRow.video_urls ?? [],
+        interview_token_expires_at: mRow.interview_token_expires_at,
+      })
     }
 
     setError('Invalid or expired interview link.')
+    return true
+  }
+
+  async function load() {
+    setLoading(true)
+    setError('')
+
+    try {
+      const handled = await loadFromEdge()
+      if (!handled) await loadFromDirect()
+    } catch {
+      try {
+        await loadFromDirect()
+      } catch {
+        setError('Could not load interview. Please check your connection and try again.')
+      }
+    }
     setLoading(false)
   }
 

@@ -1,20 +1,23 @@
 import { useState, useRef, useEffect } from 'react'
+import { getVideoInterviewTranscript, hasVideoInterviewTranscript } from '../utils/interviewTranscript'
 
 const INTEGRITY_COLOR = (s) => s >= 80 ? 'var(--green)' : s >= 50 ? 'var(--amber)' : 'var(--red)'
 const INTEGRITY_LABEL = (s) => s >= 80 ? 'High Integrity' : s >= 50 ? 'Some Concerns' : 'Flagged'
 
-export default function VideoPlayer({ candidate, onClose }) {
+export default function VideoPlayer({ candidate, onClose, initialView = 'video' }) {
   const { full_name, video_urls = [], integrity_score, integrity_flags = [] } = candidate
   const [activeIdx, setActiveIdx] = useState(0)
+  const [view, setView] = useState(initialView)
   const videoRef = useRef(null)
+  const transcript = getVideoInterviewTranscript(candidate)
+  const showSummary = hasVideoInterviewTranscript(candidate)
 
-  // Load new video when tab changes
   useEffect(() => {
     if (videoRef.current && video_urls[activeIdx]?.url) {
       videoRef.current.load()
       videoRef.current.play().catch(() => {})
     }
-  }, [activeIdx])
+  }, [activeIdx, view])
 
   const score = integrity_score ?? 100
   const scoreColor = INTEGRITY_COLOR(score)
@@ -38,10 +41,16 @@ export default function VideoPlayer({ candidate, onClose }) {
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '18px 24px', borderBottom: '1px solid var(--border2)' }}>
           <div>
-            <div style={{ fontSize: 11, ...mono, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-3)', marginBottom: 4 }}>Video Interview Recording</div>
+            <div style={{ fontSize: 11, ...mono, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-3)', marginBottom: 4 }}>Video Interview</div>
             <div style={{ fontSize: 17, fontWeight: 500, color: 'var(--text)' }}>{full_name}</div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            {showSummary && (
+              <div style={{ display: 'flex', gap: 4, background: 'var(--bg)', borderRadius: 8, padding: 3, border: '1px solid var(--border)' }}>
+                <button type="button" onClick={() => setView('video')} style={{ padding: '6px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 11, ...mono, background: view === 'video' ? 'var(--accent)' : 'transparent', color: view === 'video' ? '#fff' : 'var(--text-3)' }}>▶ Video</button>
+                <button type="button" onClick={() => setView('summary')} style={{ padding: '6px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 11, ...mono, background: view === 'summary' ? 'var(--accent)' : 'transparent', color: view === 'summary' ? '#fff' : 'var(--text-3)' }}>💬 Summary</button>
+              </div>
+            )}
             <div style={{ textAlign: 'right' }}>
               <div style={{ fontSize: 22, fontWeight: 700, color: scoreColor }}>{score}</div>
               <div style={{ fontSize: 11, ...mono, color: scoreColor }}>{INTEGRITY_LABEL(score)}</div>
@@ -50,12 +59,29 @@ export default function VideoPlayer({ candidate, onClose }) {
           </div>
         </div>
 
-        {/* Body */}
+        {view === 'summary' ? (
+          <div style={{ padding: 24 }}>
+            {transcript.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-3)', fontSize: 13 }}>
+                No speech transcript captured for this interview.
+              </div>
+            ) : (
+              <div className="transcript-wrap" style={{ maxHeight: '60vh' }}>
+                {transcript.map((msg, i) => (
+                  <div key={i} className={`bubble ${msg.role === 'assistant' || msg.role === 'interviewer' ? 'assistant' : 'user'}`}>
+                    <div className="bubble-who">{msg.role === 'assistant' || msg.role === 'interviewer' ? 'Question' : 'Candidate'}</div>
+                    <div className="bubble-body">{msg.content}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : (
+        /* Body */
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 280px', flex: 1, minHeight: 0 }}>
 
           {/* Video column */}
           <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {/* Player */}
             <div style={{ background: '#000', borderRadius: 10, overflow: 'hidden', aspectRatio: '16/9' }}>
               {video_urls[activeIdx]?.url ? (
                 <video
@@ -71,13 +97,18 @@ export default function VideoPlayer({ candidate, onClose }) {
               )}
             </div>
 
-            {/* Question text */}
             <div style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, padding: '12px 16px' }}>
               <div style={{ fontSize: 10, ...mono, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-3)', marginBottom: 6 }}>Question {activeIdx + 1}</div>
               <div style={{ fontSize: 13, color: 'var(--text-2)', lineHeight: 1.6 }}>{video_urls[activeIdx]?.q}</div>
             </div>
 
-            {/* Question tabs */}
+            {video_urls[activeIdx]?.transcript && (
+              <div style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, padding: '12px 16px' }}>
+                <div style={{ fontSize: 10, ...mono, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-3)', marginBottom: 6 }}>Candidate answer (transcript)</div>
+                <div style={{ fontSize: 13, color: 'var(--text-2)', lineHeight: 1.6 }}>{video_urls[activeIdx].transcript}</div>
+              </div>
+            )}
+
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
               {video_urls.map((v, i) => (
                 <button
@@ -98,18 +129,15 @@ export default function VideoPlayer({ candidate, onClose }) {
 
           {/* Integrity sidebar */}
           <div style={{ borderLeft: '1px solid var(--border2)', padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {/* Score card */}
             <div style={{ background: 'var(--bg)', borderRadius: 10, padding: '16px', textAlign: 'center', border: `1px solid ${scoreColor}33` }}>
               <div style={{ fontSize: 11, ...mono, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-3)', marginBottom: 10 }}>Integrity Score</div>
               <div style={{ fontSize: 44, fontWeight: 700, color: scoreColor, lineHeight: 1, marginBottom: 4 }}>{score}</div>
               <div style={{ fontSize: 12, ...mono, color: scoreColor }}>{INTEGRITY_LABEL(score)}</div>
-              {/* Score bar */}
               <div style={{ marginTop: 12, height: 4, borderRadius: 2, background: 'var(--border2)', overflow: 'hidden' }}>
                 <div style={{ height: '100%', width: `${score}%`, background: scoreColor, borderRadius: 2, transition: 'width 0.5s' }} />
               </div>
             </div>
 
-            {/* Violations */}
             <div>
               <div style={{ fontSize: 11, ...mono, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-3)', marginBottom: 10 }}>
                 Flags ({integrity_flags.length})
@@ -130,13 +158,19 @@ export default function VideoPlayer({ candidate, onClose }) {
               )}
             </div>
 
-            {/* Recording info */}
-            <div style={{ marginTop: 'auto', padding: '12px', background: 'var(--bg)', borderRadius: 8, fontSize: 11, ...mono, color: 'var(--text-3)', lineHeight: 1.7 }}>
+            {showSummary && (
+              <button type="button" className="btn btn-secondary" style={{ fontSize: 11, marginTop: 'auto' }} onClick={() => setView('summary')}>
+                💬 View interview summary
+              </button>
+            )}
+
+            <div style={{ padding: '12px', background: 'var(--bg)', borderRadius: 8, fontSize: 11, ...mono, color: 'var(--text-3)', lineHeight: 1.7 }}>
               <div>{video_urls.length} questions recorded</div>
               <div>{video_urls.filter(v => v.url).length} successfully uploaded</div>
             </div>
           </div>
         </div>
+        )}
       </div>
     </div>
   )

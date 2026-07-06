@@ -8,7 +8,7 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
   try {
-    const { token, table, video_urls, integrity_score, integrity_flags } = await req.json()
+    const { token, table, video_urls, interview_transcript, integrity_score, integrity_flags } = await req.json()
 
     if (!token || !table || !['candidates', 'job_matches'].includes(table)) {
       return new Response(JSON.stringify({ error: 'Invalid request' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
@@ -38,8 +38,10 @@ serve(async (req) => {
       .from(table)
       .update({
         video_urls,
+        interview_transcript: interview_transcript ?? null,
         integrity_score,
         integrity_flags,
+        interviewed_at: new Date().toISOString(),
         ...(allUploaded ? { interview_invite_token: null } : {}),
       })
       .eq('id', row.id)

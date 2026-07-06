@@ -6,3 +6,6 @@ verify_jwt = false
 
 [functions.cal-webhook]
 verify_jwt = false
+
+[functions.get-interview-session]
+verify_jwt = false

@@ -19,8 +19,22 @@ export async function callClaude(messages, systemPrompt, maxTokens = 1000) {
     }
   )
 
-  const data = await res.json()
-  if (!res.ok || data.error) throw new Error(data.error || `API error ${res.status}`)
+  let data
+  try {
+    data = await res.json()
+  } catch {
+    throw new Error(`AI request failed (HTTP ${res.status}). Check Supabase call-claude deployment.`)
+  }
+
+  if (!res.ok || data.error) {
+    const msg = data.error || `API error ${res.status}`
+    if (res.status === 503) throw new Error('AI not configured: set ANTHROPIC_API_KEY in Supabase Edge Function secrets.')
+    if (res.status === 401) throw new Error('Not logged in — refresh the page and sign in again.')
+    if (res.status === 429) throw new Error(msg)
+    throw new Error(msg)
+  }
+
+  if (!data.text) throw new Error('AI returned an empty response.')
   return data.text
 }
 
@@ -38,6 +52,14 @@ export function defaultInterviewQuestions(job) {
     { q: `How do you handle conflicting priorities or tight deadlines? Give a concrete example.`, type: 'behavioral', seconds: 90 },
     { q: `Where do you see the biggest gap between your experience and this role, and how would you close it?`, type: 'technical', seconds: 120 },
   ]
+}
+
+/** Questions for the public interview page — never calls Claude (no auth session). */
+export function resolveInterviewQuestions(job) {
+  if (Array.isArray(job?.interview_questions) && job.interview_questions.length > 0) {
+    return job.interview_questions
+  }
+  return defaultInterviewQuestions(job)
 }
 
 export async function generateInterviewQuestions(job) {
@@ -59,7 +81,60 @@ Rules: 3 technical (120 seconds each), 2 behavioral (90 seconds each). Be specif
   }
 }
 
-// NOTE: scores here are generated from CV data via a simulated interview — they
+/** Score a video interview transcript (STT Q&A) — overallScore is 0–10. Uses Claude via call-claude. */
+export async function scoreVideoInterview(candidate, job, transcriptMessages = []) {
+  const pairs = []
+  for (let i = 0; i < transcriptMessages.length; i++) {
+    const m = transcriptMessages[i]
+    if (m.role === 'assistant' || m.role === 'interviewer') {
+      const answer = transcriptMessages[i + 1]
+      if (answer && (answer.role === 'user' || answer.role === 'candidate')) {
+        pairs.push({ question: m.content, answer: answer.content })
+        i++
+      }
+    }
+  }
+
+  const qaBlock = pairs.map((p, i) =>
+    `Q${i + 1}: ${p.question}\nA${i + 1}: ${p.answer}`
+  ).join('\n\n')
+
+  const systemPrompt = `You are an expert technical recruiter scoring a VIDEO interview.
+The transcript comes from speech-to-text and may be imperfect — judge intent and substance, not transcription quality.
+
+Job: ${job?.title ?? 'Unknown'}
+Required skills: ${(job?.required_skills ?? []).join(', ') || 'N/A'}
+Experience: ${job?.experience_years ?? '?'} years
+Candidate: ${candidate?.full_name ?? 'Unknown'} — ${candidate?.candidate_role ?? ''}
+
+Return ONLY valid JSON (no markdown):
+{
+  "overallScore": 6.5,
+  "recommendation": "Strong Hire|Hire|Borderline|Reject",
+  "summary": "2-3 sentence overall assessment",
+  "strengths": ["strength 1", "strength 2"],
+  "weaknesses": ["weakness 1"],
+  "perQuestion": [
+    {"question": "...", "score": 7, "feedback": "one sentence"}
+  ]
+}
+
+Rules: overallScore is 0–10 (one decimal). Score answers against the job requirements, not the CV alone.`
+
+  const reply = await callClaude(
+    [{ role: 'user', content: `Score this video interview transcript:\n\n${qaBlock || 'No answers captured.'}` }],
+    systemPrompt,
+    2000,
+  )
+  const clean = reply.trim().replace(/^```(?:json)?\s*/i, '').replace(/```[\s]*$/m, '').trim()
+  try {
+    return JSON.parse(clean)
+  } catch {
+    throw new Error('AI response was not valid JSON. Deploy the latest call-claude function and try again.')
+  }
+}
+
+// NOTE: scores below are generated from CV data via a simulated interview — they
 // are NOT derived from the candidate's video responses. Label accordingly in UI.
 export async function runAutomatedInterview(candidate, jobDef) {
   const systemPrompt = `You are simulating a job interview.

@@ -15,6 +15,8 @@ import { triggerTalentPoolMatch, mapMatchToCandidate } from '../../utils/talentP
 import { logAudit } from '../../utils/audit'
 import TagInput from '../../components/TagInput'
 import VideoPlayer from '../../components/VideoPlayer'
+import InterviewSummary from '../../components/InterviewSummary'
+import { hasVideoInterviewTranscript } from '../../utils/interviewTranscript'
 import AIScoreFeedback from '../../components/AIScoreFeedback'
 
 const stripRawText = (k, v) => k === 'raw_text' ? undefined : v
@@ -70,6 +72,19 @@ function interviewAppUrl() {
   return (import.meta.env.VITE_APP_URL || (typeof window !== 'undefined' ? window.location.origin : '') || 'https://oneselectai.com').replace(/\/$/, '')
 }
 
+function videoScoreColor(score) {
+  if (score >= 7) return 'var(--green)'
+  if (score >= 5) return 'var(--amber)'
+  return 'var(--red)'
+}
+
+function canViewInterviewTranscript(c) {
+  if (c.video_urls?.some(v => v?.url != null)) return true
+  if (hasVideoInterviewTranscript(c)) return true
+  if (import.meta.env.DEV) return true
+  return false
+}
+
 export default function AdminPipeline({ allowedClientIds } = {}) {
   const { profile, user } = useAuth()
   const isClient = profile?.user_role === 'client'
@@ -96,6 +111,7 @@ export default function AdminPipeline({ allowedClientIds } = {}) {
   const [poolMatchLoading, setPoolMatchLoading] = useState(false)
   const [poolMatchProgress, setPoolMatchProgress] = useState({ current: 0, total: 0 })
   const [videoPlayerTarget, setVideoPlayerTarget] = useState(null)
+  const [interviewSummaryTarget, setInterviewSummaryTarget] = useState(null)
 
   // Outreach (Feature 1)
   const [outreachLog, setOutreachLog]     = useState({}) // candidateId → {sent_at, responded, id}
@@ -1547,7 +1563,24 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
                       )}
                     </>
                   )}
-                  {(c.scores?.overallScore != null || c.video_urls?.some(v => v?.url != null)) && (
+                  {c.video_urls?.some(v => v?.url != null) && (
+                    <>
+                      <span className="badge badge-green" style={{ fontSize: 10 }}>Interviewed</span>
+                      {c.scores?.videoInterview?.overallScore != null && (
+                        <span className="mono" style={{ fontSize: 12, fontWeight: 700, color: videoScoreColor(c.scores.videoInterview.overallScore) }}>
+                          {Number(c.scores.videoInterview.overallScore).toFixed(1)}/10
+                        </span>
+                      )}
+                      <button className="btn btn-secondary" style={{ fontSize: 10, padding: '2px 8px' }} onClick={e => { e.stopPropagation(); setVideoPlayerTarget(c) }}>▶ Watch</button>
+                      {canViewInterviewTranscript(c) && (
+                        <button className="btn btn-secondary" style={{ fontSize: 10, padding: '2px 8px' }} onClick={e => { e.stopPropagation(); setInterviewSummaryTarget(c) }}>📄 Transcript</button>
+                      )}
+                    </>
+                  )}
+                  {canViewInterviewTranscript(c) && !c.video_urls?.some(v => v?.url != null) && (
+                    <button className="btn btn-secondary" style={{ fontSize: 10, padding: '2px 8px' }} onClick={e => { e.stopPropagation(); setInterviewSummaryTarget(c) }}>📄 Transcript</button>
+                  )}
+                  {c.scores?.overallScore != null && !c.video_urls?.some(v => v?.url != null) && (
                     <span className="badge badge-green" style={{ fontSize: 10 }}>Interviewed</span>
                   )}
                   {!isClient && <button className="btn btn-ghost" title="Remove candidate" style={{ padding: '2px 6px', fontSize: 14, color: 'var(--red)', opacity: 0.5 }} onClick={e => { e.stopPropagation(); setDeleteModal({ candidate: c }) }}>🗑</button>}
@@ -1699,7 +1732,15 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
                     {hasVideo && !hasScores && (
                       <>
                         <span className="badge badge-blue">Interview Submitted</span>
+                        {c.scores?.videoInterview?.overallScore != null && (
+                          <span className="mono" style={{ fontSize: 12, fontWeight: 700, color: videoScoreColor(c.scores.videoInterview.overallScore) }}>
+                            {Number(c.scores.videoInterview.overallScore).toFixed(1)}/10
+                          </span>
+                        )}
                         <button className="btn btn-secondary" style={{ fontSize: 10, padding: '2px 8px' }} onClick={() => setVideoPlayerTarget(c)}>▶ Watch</button>
+                        {canViewInterviewTranscript(c) && (
+                          <button className="btn btn-secondary" style={{ fontSize: 10, padding: '2px 8px' }} onClick={() => setInterviewSummaryTarget(c)}>📄 Transcript</button>
+                        )}
                       </>
                     )}
                     {hasScores && (
@@ -1709,6 +1750,14 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
                         <span style={{ fontSize: 10, color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>CV analysis</span>
                         {rec && <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: REC_COLOR[rec] ?? 'var(--text-3)' }}>{rec}</span>}
                         {hasVideo && <button className="btn btn-secondary" style={{ fontSize: 10, padding: '2px 8px' }} onClick={() => setVideoPlayerTarget(c)}>▶ Watch</button>}
+                        {canViewInterviewTranscript(c) && (
+                          <button className="btn btn-secondary" style={{ fontSize: 10, padding: '2px 8px' }} onClick={() => setInterviewSummaryTarget(c)}>📄 Transcript</button>
+                        )}
+                        {c.scores?.videoInterview?.overallScore != null && (
+                          <span className="mono" style={{ fontSize: 11, fontWeight: 700, color: videoScoreColor(c.scores.videoInterview.overallScore) }} title="Video interview AI score">
+                            vid {Number(c.scores.videoInterview.overallScore).toFixed(1)}/10
+                          </span>
+                        )}
                       </>
                     )}
                     {!isClient && <button className="btn btn-ghost" title={c.recruiter_notes ? 'Edit notes' : 'Add notes'} style={{ padding: '2px 6px', fontSize: 12, color: c.recruiter_notes ? 'var(--accent)' : 'var(--text-3)', opacity: 0.8 }} onClick={e => { e.stopPropagation(); setNotesModal({ candidate: c, text: c.recruiter_notes ?? '', saving: false }) }}>📝</button>}
@@ -1848,6 +1897,18 @@ Write a formal but warm offer letter (350-500 words) including: congratulations 
 
       {/* ── Video Player ── */}
       {videoPlayerTarget && <VideoPlayer candidate={videoPlayerTarget} onClose={() => setVideoPlayerTarget(null)} />}
+      {interviewSummaryTarget && (
+        <InterviewSummary
+          candidate={interviewSummaryTarget}
+          job={activeJob}
+          isFromPool={!!interviewSummaryTarget._fromPool}
+          onClose={() => setInterviewSummaryTarget(null)}
+          onScored={(updated) => {
+            setCandidates(p => p.map(x => x.id === updated.id ? { ...x, scores: updated.scores } : x))
+            setInterviewSummaryTarget(updated)
+          }}
+        />
+      )}
 
       {/* ── Outreach Modal (Feature 1) ── */}
       {outreachModal && (

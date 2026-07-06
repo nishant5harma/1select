@@ -30,3 +30,6 @@ supabase/.env
 *.sln
 *.sw?
 .vercel
+
+# Dev interview transcript exports (keep folder, ignore generated files)
+interview-files/*.md

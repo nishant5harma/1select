@@ -1,5 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { callClaude } from '../utils/api'
+import { resolveInterviewQuestions } from '../utils/api'
+import { buildTranscriptFromVideoUrls } from '../utils/interviewTranscript'
+import { saveInterviewMarkdownFile } from '../utils/interviewMarkdown'
+import { createSpeechRecognizer, isSpeechRecognitionSupported } from '../hooks/useSpeechRecognition'
 import { supabase } from '../lib/supabase'
 
 // ── Stage constants ───────────────────────────────────────────────────────────
@@ -23,22 +26,6 @@ const PENALTY = { tab_switch: 15, window_blur: 5, right_click: 3, screenshot: 10
 function bestMime() {
   const types = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm', 'video/mp4']
   return types.find(t => { try { return MediaRecorder.isTypeSupported(t) } catch { return false } }) || 'video/webm'
-}
-
-// ── Generate questions via Claude ─────────────────────────────────────────────
-async function generateQuestions(job) {
-  const sys = `Generate exactly 5 video interview questions for a ${job.title} role.
-Required skills: ${(job.required_skills || []).join(', ')}
-Experience: ${job.experience_years || 0}+ years
-
-Return ONLY a valid JSON array (no markdown):
-[{"q":"question text","type":"technical|behavioral","seconds":90}]
-
-Rules: 3 technical (120 seconds each), 2 behavioral (90 seconds each). Be specific and role-relevant.`
-
-  const reply = await callClaude([{ role: 'user', content: 'Generate.' }], sys, 700)
-  const clean = reply.trim().replace(/^```(?:json)?\s*/i, '').replace(/```[\s]*$/m, '').trim()
-  return JSON.parse(clean)
 }
 
 // ── Upload one blob to Supabase Storage ───────────────────────────────────────
@@ -88,6 +75,9 @@ export default function VideoInterview({ job, candidate, matchId, isFromPool, on
   const [retryFn,        setRetryFn]        = useState(null)
   const [camOk,          setCamOk]          = useState(false)
   const [micLevel,       setMicLevel]       = useState(0)
+  const [liveTranscript, setLiveTranscript] = useState('')
+  const [sttSupported,   setSttSupported]   = useState(false)
+  const [devMdPath,      setDevMdPath]      = useState(null)
 
   // Refs — values needed in callbacks without causing re-renders
   const videoRef      = useRef(null)   // <video> element for camera preview
@@ -95,6 +85,8 @@ export default function VideoInterview({ job, candidate, matchId, isFromPool, on
   const recorderRef   = useRef(null)   // MediaRecorder
   const chunksRef     = useRef([])     // chunks for current question
   const blobsRef      = useRef([])     // final blobs per question
+  const transcriptsRef = useRef([])    // STT text per question
+  const sttRef        = useRef(null)   // active SpeechRecognition session
   const violationsRef = useRef([])     // anti-cheating events
   const currentQRef   = useRef(0)      // mirrors currentQ for callbacks
   const stageRef      = useRef(S.SETUP)
@@ -106,6 +98,28 @@ export default function VideoInterview({ job, candidate, matchId, isFromPool, on
   // Keep refs in sync
   useEffect(() => { currentQRef.current = currentQ }, [currentQ])
   useEffect(() => { stageRef.current = stage }, [stage])
+  useEffect(() => { setSttSupported(isSpeechRecognitionSupported()) }, [])
+
+  function stopSpeechRecognition() {
+    if (!sttRef.current) return ''
+    const text = sttRef.current.stop() || sttRef.current.getText() || ''
+    sttRef.current = null
+    setLiveTranscript('')
+    return text.trim()
+  }
+
+  function startSpeechRecognition() {
+    if (!sttSupported) return
+    sttRef.current?.abort()
+    setLiveTranscript('')
+    const rec = createSpeechRecognizer({
+      lang: 'en-GB',
+      onUpdate: ({ combined }) => setLiveTranscript(combined),
+    })
+    if (!rec) return
+    sttRef.current = rec
+    rec.start()
+  }
 
   // ── Camera setup ──────────────────────────────────────────────────────────
   async function initCamera() {
@@ -159,14 +173,12 @@ export default function VideoInterview({ job, candidate, matchId, isFromPool, on
     stopMicMonitor()
     setStage(S.LOADING)
     try {
-      const customQs = Array.isArray(job.interview_questions) && job.interview_questions.length > 0
-        ? job.interview_questions
-        : await generateQuestions(job)
+      const customQs = resolveInterviewQuestions(job)
       setQuestions(customQs)
       setUploadProgress(customQs.map(() => 'pending'))
       setStage(S.READY)
     } catch {
-      setErrorMsg('Could not load interview questions. Please check your connection and try again.')
+      setErrorMsg('Could not load interview questions. Please try again.')
       setRetryFn(() => confirmDevices)
       setStage(S.ERROR)
     }
@@ -185,6 +197,7 @@ export default function VideoInterview({ job, candidate, matchId, isFromPool, on
     return () => {
       clearTimeout(timerRef.current)
       clearTimeout(warnTimerRef.current)
+      sttRef.current?.abort()
       recorderRef.current?.stop()
       streamRef.current?.getTracks().forEach(t => t.stop())
       if (micRafRef.current) cancelAnimationFrame(micRafRef.current)
@@ -253,12 +266,16 @@ export default function VideoInterview({ job, candidate, matchId, isFromPool, on
     mr.start(500)
     recorderRef.current = mr
     setTimeLeft(questions[currentQRef.current]?.seconds ?? 120)
+    startSpeechRecognition()
     setStage(S.RECORDING)
   }
 
   async function handleStopAnswer() {
     clearTimeout(timerRef.current)
     setStage(S.BETWEEN)
+
+    const transcript = stopSpeechRecognition()
+    transcriptsRef.current[currentQRef.current] = transcript
 
     // Finalize recording
     await new Promise(resolve => {
@@ -295,21 +312,37 @@ export default function VideoInterview({ job, candidate, matchId, isFromPool, on
       setUploadProgress([...prog])
       try {
         const url = await uploadBlob(blobsRef.current[i], matchId, i)
-        urls.push({ q: questions[i].q, url })
+        urls.push({
+          q: questions[i].q,
+          url,
+          transcript: transcriptsRef.current[i]?.trim() ?? '',
+        })
         prog[i] = 'done'
       } catch {
-        urls.push({ q: questions[i].q, url: null })
+        urls.push({
+          q: questions[i].q,
+          url: null,
+          transcript: transcriptsRef.current[i]?.trim() ?? '',
+        })
         prog[i] = 'error'
       }
       setUploadProgress([...prog])
     }
+
+    const interview_transcript = buildTranscriptFromVideoUrls(urls)
 
     // Calculate integrity score
     const deductions = violationsRef.current.reduce((s, v) => s + (PENALTY[v.type] || 5), 0)
     const integrityScore = Math.max(0, 100 - deductions)
 
     // Save to DB
-    const update = { video_urls: urls, integrity_score: integrityScore, integrity_flags: violationsRef.current }
+    const update = {
+      video_urls: urls,
+      interview_transcript,
+      integrity_score: integrityScore,
+      integrity_flags: violationsRef.current,
+      interviewed_at: new Date().toISOString(),
+    }
     try {
       if (onSave) {
         await onSave(update)
@@ -324,8 +357,16 @@ export default function VideoInterview({ job, candidate, matchId, isFromPool, on
       return
     }
 
+    const mdResult = await saveInterviewMarkdownFile({
+      candidateName: candidate.full_name,
+      jobTitle: job?.title,
+      questions,
+      transcripts: transcriptsRef.current,
+    })
+    if (mdResult.savedToProject) setDevMdPath(mdResult.path)
+
     setStage(S.DONE)
-    onComplete({ video_urls: urls, integrity_score: integrityScore, integrity_flags: violationsRef.current })
+    onComplete({ video_urls: urls, interview_transcript, integrity_score: integrityScore, integrity_flags: violationsRef.current })
   }
 
   // ── Shared dark overlay styles ────────────────────────────────────────────
@@ -361,7 +402,7 @@ export default function VideoInterview({ job, candidate, matchId, isFromPool, on
         <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 20 }}>
           <div>
             <div style={{ fontSize: 11, ...mono, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'rgba(255,255,255,0.35)', marginBottom: 6 }}>Video Interview</div>
-            <h2 style={{ fontSize: 22, fontWeight: 300, margin: '0 0 6px', fontFamily: 'var(--font-head)' }}>{job.title}</h2>
+            <h2 style={{ fontSize: 22, fontWeight: 300, margin: '0 0 6px', fontFamily: 'var(--font-head)' }}>{job?.title ?? 'Interview'}</h2>
             <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)' }}>{candidate.full_name} · {candidate.candidate_role}</div>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -448,6 +489,7 @@ export default function VideoInterview({ job, candidate, matchId, isFromPool, on
         <h2 style={{ fontSize: 24, fontWeight: 300, fontFamily: 'var(--font-head)', margin: '0 0 10px' }}>You have {questions.length} questions</h2>
         <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.45)', marginBottom: 32, lineHeight: 1.7 }}>
           Answer each question naturally and concisely. Stay in this window throughout. The recording starts after a 3-second countdown per question.
+          {sttSupported && ' Your spoken answers will be transcribed automatically.'}
         </p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 32, textAlign: 'left' }}>
           {questions.map((q, i) => (
@@ -509,6 +551,31 @@ export default function VideoInterview({ job, candidate, matchId, isFromPool, on
         {warning && (
           <div style={{ position: 'absolute', top: 80, left: '50%', transform: 'translateX(-50%)', background: 'rgba(239,68,68,0.95)', color: '#fff', padding: '10px 20px', borderRadius: 8, fontSize: 13, fontWeight: 500, zIndex: 10, whiteSpace: 'nowrap' }}>
             {warning}
+          </div>
+        )}
+
+        {/* Live caption bar */}
+        {sttSupported && (
+          <div style={{
+            position: 'absolute',
+            bottom: 140,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            width: 'min(92%, 720px)',
+            background: 'rgba(0,0,0,0.88)',
+            border: '2px solid rgba(184,146,74,0.55)',
+            borderRadius: 10,
+            padding: '14px 22px',
+            zIndex: 5,
+            textAlign: 'center',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.45)',
+          }}>
+            <div style={{ fontSize: 9, ...mono, color: '#B8924A', marginBottom: 8, letterSpacing: '0.14em', textTransform: 'uppercase' }}>
+              Live caption
+            </div>
+            <div style={{ fontSize: 17, color: liveTranscript ? '#fff' : 'rgba(255,255,255,0.45)', lineHeight: 1.55, fontWeight: liveTranscript ? 400 : 300 }}>
+              {liveTranscript || 'Speak now — your words will appear here…'}
+            </div>
           </div>
         )}
 
@@ -615,6 +682,12 @@ export default function VideoInterview({ job, candidate, matchId, isFromPool, on
               <span style={{ fontSize: 12, color: scoreColor }}>{scoreLabel}</span>
             </div>
           </div>
+
+          {devMdPath && import.meta.env.DEV && (
+            <div style={{ background: 'rgba(184,146,74,0.12)', border: '1px solid rgba(184,146,74,0.35)', borderRadius: 8, padding: '12px 16px', marginBottom: 20, fontSize: 11, ...mono, color: 'rgba(255,255,255,0.65)', lineHeight: 1.6 }}>
+              Transcript saved to <strong style={{ color: '#B8924A' }}>{devMdPath}</strong>
+            </div>
+          )}
 
           <button onClick={() => { streamRef.current?.getTracks().forEach(t => t.stop()); onClose() }}
             style={{ padding: '13px 32px', borderRadius: 8, background: 'var(--accent)', color: '#0F0F0F', border: 'none', cursor: 'pointer', fontSize: 14 }}>

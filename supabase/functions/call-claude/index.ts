@@ -111,10 +111,10 @@ serve(async (req) => {
 
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'AI service error. Please try again.'
-    console.error('call-claude error:', msg)
+    console.error('call-claude error:', msg, err)
     return new Response(
       JSON.stringify({ error: msg }),
-      { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }
 })
